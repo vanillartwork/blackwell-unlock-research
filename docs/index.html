@@ -1,0 +1,198 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-2.0-only -->
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blackwell ABI Lab · Tensor throughput</title>
+<style>
+:root{color-scheme:light;--ink:#162b30;--muted:#485f62;--paper:#f3f6f4;--line:#c9d5d1;--dark:#183c43;--accent:#9de5b6;--marker:#953a10;--mono:"IBM Plex Mono",Consolas,monospace;font:16px/1.55 "Inter","Segoe UI","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--paper)}
+*{box-sizing:border-box}body{margin:0}a{color:#175b56;text-underline-offset:3px}button,input{font:inherit;accent-color:#226653}button{cursor:pointer}button:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid #d7802d;outline-offset:3px}
+.wrap{width:min(1180px,94%);margin:auto}.mast{background:#102f35;color:#f0f9f4;border-bottom:5px solid #8ad8ac}.nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 0;border-bottom:1px solid #446065}.brand{font:600 .94rem var(--mono);letter-spacing:.015em;display:flex;gap:.7rem;align-items:center}.symbol{display:inline-flex;align-items:flex-end;gap:3px;height:1.15rem}.symbol i{width:5px;height:45%;background:#a2e6bb}.symbol i:nth-child(2){height:75%}.symbol i:nth-child(3){height:100%}.language{border:1px solid #74918f;border-radius:4px;background:none;color:white;padding:.22rem .7rem}.hero{padding:2.1rem 0 2.3rem;display:grid;grid-template-columns:1.4fr 1fr;gap:2rem;align-items:center}h1{font-size:clamp(2rem,4.6vw,3.8rem);line-height:1.1;margin:0 0 .8rem;letter-spacing:-.045em}.hero p{margin:0;color:#d3e4df;max-width:62ch}.sample{border-left:1px solid #597873;padding-left:2rem}.sample strong{font-size:clamp(1.45rem,3vw,2.4rem);line-height:1.35;color:#b0ecc4;font-family:var(--mono)}.sample .caption{color:#e4ede8;font-size:.92rem}.sample .context{font-size:.85rem;color:#bfd1ce}.sample strong span{color:#a0b9b5;font-size:.68em}
+main{padding:1.4rem 0 3rem}h2{font-size:1.55rem;line-height:1.3;margin:0}.controls,.plot,.method{background:white;border:1px solid var(--line);border-radius:7px}.controls{padding:.9rem 1.2rem;display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;gap:1rem;margin-bottom:1rem}.controls>div{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}.group-label{color:var(--muted);font-size:.88rem}.precision{display:flex;flex-wrap:wrap;gap:3px}.precision button{border:1px solid transparent;border-radius:4px;padding:.28rem .55rem;font:600 .9rem var(--mono);color:var(--muted);background:#eef3f0}.precision button[aria-pressed=true]{background:var(--dark);color:white}.toggles{display:flex;flex-wrap:wrap;gap:.8rem}.toggles label{display:flex;align-items:center;gap:.22rem;font-size:.92rem}.toggles input{width:1rem;height:1rem}.plot{padding:1.4rem 1.6rem}.plothead{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem;flex-wrap:wrap}.count,.minor,.spec{color:var(--muted);font-size:.85rem}.legend{display:flex;align-items:center;gap:1.15rem;flex-wrap:wrap;margin:1rem 0;font-size:.9rem}.key{display:inline-flex;align-items:center;gap:.38rem}.sw{width:20px;height:10px;background:var(--dark);border-radius:1px}.extend,.sw.ext{background:repeating-linear-gradient(125deg,#c4eed3 0 4px,#aee4c0 4px 6px);border:1px dashed #51916b}.sw.pin{width:3px;background:var(--marker);height:15px}.chartrow,.axis{display:grid;grid-template-columns:minmax(150px,23%) minmax(0,1fr) minmax(128px,16%);gap:1.15rem;align-items:center}.axis{font: .78rem var(--mono);color:var(--muted);padding:1rem 0 .6rem;border-bottom:1px solid var(--line)}.ticks{position:relative;height:1.6rem}.ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}.ticks span:first-child{transform:none}.ticks span:last-child{transform:translateX(-100%)}.numbers{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}.chartrow{padding:.62rem 0;border-bottom:1px solid #e2e9e5}.chartrow:last-child{border:none}.model{font-weight:650;line-height:1.25}.spec{font: .75rem/1.5 var(--mono);margin-top:.18rem}.track{height:1.1rem;position:relative;background:#f2f5f3;border-radius:2px}.stock,.extend,.marker{position:absolute;top:0;height:100%}.stock{left:0;background:var(--dark);border-radius:2px 0 0 2px}.marker{width:3px;background:var(--marker);height:calc(100% + 8px);top:-4px;box-shadow:0 0 0 1px white}.numbers{font-size:.94rem}.numbers small{color:var(--muted)}.note{font-size:.9rem;color:var(--muted);margin:.9rem 0 0}.method{margin:1rem 0;padding:1rem 1.35rem}.method summary{cursor:pointer;font-weight:650}.method p{margin:.7rem 0}.formula{font: .9rem/1.5 var(--mono);padding:.7rem;background:var(--paper);overflow-wrap:anywhere}footer{font-size:.88rem;color:var(--muted);padding:.25rem 0}
+@media(max-width:700px){.hero{grid-template-columns:1fr;gap:1rem;padding:1.4rem 0}.sample{padding:.6rem 0 0;border-left:0;border-top:1px solid #597873}.controls{padding:.8rem}.plot{padding:1rem}.chartrow,.axis{grid-template-columns:1fr auto;gap:.35rem}.chartrow .track{grid-column:1/-1;grid-row:2}.axis .ticks{grid-column:1/-1;grid-row:2;height:1.1rem}.axis{padding-top:.4rem}.numbers{grid-column:2;grid-row:1}.legend{gap:.5rem .9rem;font-size:.85rem}.spec{display:inline;margin-left:.45rem}.model{display:inline}.chartrow{padding:.55rem 0 .8rem}}
+</style></head><body>
+<header class="mast"><div class="wrap"><nav class="nav"><div class="brand"><span class="symbol" aria-hidden="true"><i></i><i></i><i></i></span>blackwell-unlock-research</div><button class="language" id="language" type="button">中文</button></nav>
+<div class="hero"><div><h1 data-i="title"></h1><p data-i="intro"></p></div><div class="sample"><div class="caption" id="sampleTitle"></div><strong id="sample"></strong><div class="context" id="sampleNote"></div></div></div></div></header>
+<main class="wrap"><section class="controls"><div><span class="group-label" data-i="precision"></span><div class="precision" id="precision" role="group"></div></div><div class="toggles">
+<label><input type="checkbox" id="laptop"><span data-i="laptop"></span></label>
+<label><input type="checkbox" id="pro"><span data-i="pro"></span></label>
+<label><input type="checkbox" id="systems"><span data-i="systems"></span></label>
+<label><input type="checkbox" id="log"><span data-i="log"></span></label></div></section>
+<section class="plot" aria-labelledby="chartTitle"><div class="plothead"><h2 id="chartTitle"></h2><div class="count" id="count" aria-live="polite"></div></div>
+<div class="legend"><span class="key"><i class="sw"></i><span data-i="factory"></span></span><span class="key" id="extraKey"><i class="sw ext"></i><span data-i="limit"></span></span><span class="key" id="markerKey"><i class="sw pin"></i><span data-i="software"></span></span></div>
+<p id="fp16Note" class="note" hidden></p><div class="axis" aria-hidden="true"><span>GPU</span><div class="ticks" id="ticks"></div><div class="numbers" id="unit"></div></div><div id="rows" role="list"></div><p id="chartNote" class="note"></p></section>
+<details class="method" open><summary data-i="method"></summary><p class="formula" data-i="formula"></p><p data-i="models"></p><p data-i="anchor"></p><p data-i="route2"></p><p hidden id="localReport"><a id="measure" href="../reports/gb205-2f18/README.md" data-i="measure"></a></p></details>
+<footer><span data-i="credit"></span> <a href="https://github.com/physicsdolphin/nv-uefi-unlocker/blob/e912777c9a899e4eb9b9a4d9355ec9610b05a315/docs/tools/tflops-ceiling.html">physicsdolphin/nv-uefi-unlocker</a> · <a href="https://github.com/physicsdolphin/nv-uefi-unlocker/blob/e912777c9a899e4eb9b9a4d9355ec9610b05a315/LICENSE">GPL-2.0</a> · <a id="refs" href="https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf" data-i="refs"></a></footer>
+<noscript>请启用 JavaScript 以计算图表。 Enable JavaScript to calculate the chart.</noscript></main>
+<script id="gpu-data" type="application/json">
+[
+  {"model":"DGX Spark","die":"GB10","sm":48,"boostMHz":null,"architecture":"Blackwell","category":"soc"},
+  {"model":"B200 SXM","die":"GB100 × 2","sm":148,"boostMHz":null,"architecture":"Blackwell","category":"dc"},
+  {"model":"RTX 4090","die":"AD102","sm":128,"boostMHz":2520,"architecture":"Ada","category":"ada"},
+  {"model":"RTX 5050","die":"GB207-300","sm":20,"boostMHz":2572,"architecture":"Blackwell","category":"desktop"},
+  {"model":"RTX 5060","die":"GB206-250","sm":30,"boostMHz":2497,"architecture":"Blackwell","category":"desktop"},
+  {"model":"RTX 5060 Ti","die":"GB206-300","sm":36,"boostMHz":2572,"architecture":"Blackwell","category":"desktop"},
+  {"model":"RTX 5070","die":"GB205-300","sm":48,"boostMHz":2512,"architecture":"Blackwell","category":"desktop"},
+  {"model":"RTX 5070 Ti","die":"GB203-300","sm":70,"boostMHz":2452,"architecture":"Blackwell","category":"desktop"},
+  {"model":"RTX 5080","die":"GB203-400","sm":84,"boostMHz":2617,"architecture":"Blackwell","category":"desktop"},
+  {"model":"RTX 5090 D","die":"GB202-250","sm":170,"boostMHz":2407,"architecture":"Blackwell","category":"desktop"},
+  {"model":"RTX 5090","die":"GB202-300","sm":170,"boostMHz":2407,"architecture":"Blackwell","category":"desktop"},
+  {"model":"RTX PRO 6000","die":"GB202","sm":188,"boostMHz":2617,"architecture":"Blackwell","category":"pro"},
+  {"model":"RTX PRO 5000","die":"GB202","sm":110,"boostMHz":2377,"architecture":"Blackwell","category":"pro"},
+  {"model":"RTX PRO 4000","die":"GB203","sm":70,"boostMHz":2055,"architecture":"Blackwell","category":"pro"},
+  {"model":"RTX PRO 4500","die":"GB203","sm":82,"boostMHz":2407,"architecture":"Blackwell","category":"pro"},
+  {"model":"RTX 5090 Laptop","die":"GB203","sm":82,"boostMHz":2160,"architecture":"Blackwell","category":"laptop"},
+  {"model":"RTX 5080 Laptop","die":"GB203","sm":60,"boostMHz":2287,"architecture":"Blackwell","category":"laptop"},
+  {"model":"RTX 5070 Ti Laptop","die":"GB205","sm":46,"boostMHz":2220,"architecture":"Blackwell","category":"laptop"},
+  {"model":"RTX 5070 Laptop","die":"GB206","sm":36,"boostMHz":2347,"architecture":"Blackwell","category":"laptop"},
+  {"model":"RTX 5060 Laptop","die":"GB206","sm":26,"boostMHz":2497,"architecture":"Blackwell","category":"laptop"},
+  {"model":"RTX 5050 Laptop","die":"GB207","sm":20,"boostMHz":2662,"architecture":"Blackwell","category":"laptop"}
+]
+</script>
+<script>
+"use strict";
+const gpuList = JSON.parse(document.getElementById("gpu-data").textContent);
+const precisions = ["BF16", "FP16", "FP8", "TF32", "FP32"];
+const fullFma = {FP32:128, TF32:256, FP16:512, BF16:512, FP8:1024};
+// Single B200: HGX figures divided by eight GPUs and, for tensors, by two for sparsity.
+const b200Dense = {FP32:75, TF32:1125, FP16:2250, BF16:2250, FP8:4500};
+// Upstream estimates for the 6144-core DGX Spark. NVIDIA publishes an FP4 AI figure.
+const sparkEstimate = {FP32:31.3, TF32:31.3, FP16:62.6, BF16:62.6, FP8:125.2};
+const copy = {
+ en:{
+ title:"Blackwell throughput",intro:"Compare dense arithmetic peaks at reference boost clocks. Change the precision to see which paths leave half the modeled tensor throughput unused.",
+ precision:"Precision",laptop:"Laptops",pro:"RTX PRO",systems:"B200 / Spark",log:"Log scale",factory:"Factory / reference peak",limit:"Hypothetical full-rate ceiling",software:"Route 2 · FP16 path reference (0.8×)",method:"How to read the model",refs:"Sources and specifications",measure:"GB205 benchmark and accuracy results",
+ formula:"Dense TFLOP/s = SM count × FMA per SM per clock × 2 × boost (MHz) ÷ 1,000,000",
+ models:"One fused multiply-add counts as two operations. FP32 uses CUDA cores. All tensor modes assume FP32 accumulation and exclude sparsity. The full-rate RTX profiles use 256 TF32, 512 FP16/BF16 or 1,024 FP8 FMA per SM per clock. The GeForce RTX 50-series and RTX 4090 factory model halves those rates. The extension asks what the same silicon could deliver at full rate. The Blackwell research has not demonstrated that change on RTX 50-series hardware.",
+ anchor:"The GeForce RTX 4090 is the Ada comparison: its tensor rows show both the half-rate factory peak and the modeled full-rate ceiling. Its FP32 CUDA-core row is unchanged. RTX PRO uses a full-rate desktop profile. B200 uses published HGX dense peaks per GPU. GB10 uses upstream estimates derived from the FP4 specification. Neither system uses an assumed boost clock. The 5090 D row models SM throughput only; its separate product-level AI limits may lower sustained results.",
+ route2:"The 0.8× line is a guide for the faster FP16 accumulation path, extrapolated from 0.80–0.83× in the GB205 benchmark. At K = 8192 the chunked operator reached 0.58× and 0.65× of the clock-normalized ceiling at chunk sizes 2048 and 4096, with lower error than full-length FP16. Other models and matrix shapes need their own measurements.",
+ credit:"Specification data adapted from",factoryTo:"Factory / hypothetical ceiling",factoryOnly:"Factory peak",linear:"Linear axis from zero",logarithmic:"Log axis from 1 TFLOP/s",sorted:"models · sorted by ceiling",note:"Values are dense TFLOP/s. The second number is the total hypothetical peak. Desktop reference clocks and the top of each laptop’s published boost range are used. Board power and sustained clocks vary.",estimate:"estimate",published:"published",core:"CUDA cores",acc:"FP32 accumulation",chart:"Dense throughput",units:"TFLOP/s"
+ },
+ zh:{
+ title:"Blackwell 算力对照",intro:"按参考 Boost 频率比较稠密运算峰值。切换精度，可以看到哪些路径在模型中只用了约一半的张量吞吐。",
+ precision:"运算精度",laptop:"笔记本",pro:"专业卡",systems:"B200 / Spark",log:"对数刻度",factory:"出厂 / 对照峰值",limit:"理论满速上限",software:"路线 2 · FP16 路径参考（0.8×）",method:"如何读这张图",refs:"资料与规格来源",measure:"GB205 吞吐与误差实测",
+ formula:"稠密 TFLOP/s = SM 数 × 每 SM 每时钟 FMA 数 × 2 × Boost 频率（MHz）÷ 1,000,000",
+ models:"一次融合乘加计两次运算。FP32 使用 CUDA 核心，其余精度均指张量核、FP32 累加，不计稀疏加速。RTX 模型每 SM 每时钟的满速 FMA 数分别为 TF32 256、FP16/BF16 512、FP8 1024，消费级 RTX 50 系和 RTX 4090 的出厂估算取一半。延伸段表示同一芯片恢复满速时的假设上限。路线 1 尚未在 RTX 50 系上实现这一变化。",
+ anchor:"作为 Ada 消费卡参照，RTX 4090 的张量路径同时显示半速出厂峰值和理论满速上限。FP32 CUDA 核心路径保持全速。RTX PRO 采用工作站满速模型。B200 按 NVIDIA 的 HGX 整机规格换算成单 GPU 稠密峰值；GB10 沿用上游从 FP4 规格折算的估计，两者均不虚设 Boost 频率。5090 D 仅按 SM 规格建模，其独立的产品级 AI 限制可能进一步降低实际吞吐。",
+ route2:"0.8× 标线是较快 FP16 累加路径的参考值，依据 GB205 实测的 0.80–0.83× 推算。K = 8192 时，分块算子取 2048 和 4096 分别达到按时钟归一化满速的 0.58× 和 0.65×，误差均低于全程 FP16 累加。其他卡和矩阵形状需要单独测量。",
+ credit:"规格数据改编自",factoryTo:"出厂峰值 / 假设满速上限",factoryOnly:"出厂峰值",linear:"线性轴，从零起",logarithmic:"对数轴，从 1 TFLOP/s 起",sorted:"款 · 按上限排序",note:"数值单位为稠密 TFLOP/s，第二个数是包含出厂段在内的总上限。桌面卡使用参考 Boost，笔记本使用官方 Boost 范围上端。实际频率受功耗配置与散热影响。",estimate:"估算",published:"官方规格换算",core:"CUDA 核心",acc:"FP32 累加",chart:"稠密吞吐对照",units:"TFLOP/s"
+ }};
+const byId = id => document.getElementById(id);
+const initialLanguage = location.hash.slice(1);
+let lang = ["zh","en"].includes(initialLanguage) ? initialLanguage : (navigator.language.startsWith("zh") ? "zh" : "en");
+let precision = "BF16";
+function peaks(card, mode) {
+  if (card.category === "dc" || card.category === "soc") {
+    const peak = (card.category === "dc" ? b200Dense : sparkEstimate)[mode];
+    return {factory:peak, ceiling:peak};
+  }
+  const full = card.sm * fullFma[mode] * 2 * card.boostMHz / 1e6;
+  const consumer = ["desktop","laptop","ada"].includes(card.category);
+  const factory = consumer && mode !== "FP32" ? full / 2 : full;
+  return {factory, ceiling:full};
+}
+function el(tag, cls, label) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (label !== undefined) node.textContent = label;
+  return node;
+}
+function makeScale(max, log) {
+  if (log) {
+    const end = 10 ** Math.ceil(Math.log10(max));
+    const ticks = [];
+    for (let value = 1; value <= end; value *= 10) ticks.push(value);
+    return {ticks, position:value => 100 * Math.log10(value) / Math.log10(end)};
+  }
+  const base = 10 ** Math.floor(Math.log10(max / 4));
+  const step = [1, 2, 2.5, 5, 10].map(n => n * base).find(n => n >= max / 4);
+  const end = Math.ceil(max / step) * step;
+  return {ticks:Array.from({length: Math.round(end / step) + 1}, (_,i) => i * step), position:value => 100 * value / end};
+}
+function chartRow(item, scale, format, t) {
+  const {card, factory, ceiling} = item;
+  const row = el("div","chartrow");
+  row.setAttribute("role","listitem");
+  const info = el("div");
+  const model = lang === "zh" ? card.model.replace(" Laptop"," 笔记本") : card.model;
+  info.append(el("div","model",model));
+  const clock = card.boostMHz ? card.boostMHz + " MHz" : (card.category === "dc" ? t.published : t.estimate);
+  info.append(el("div","spec",card.die + " · " + card.sm + " SM · " + clock));
+  const track = el("div","track");
+  track.setAttribute("aria-hidden","true");
+  const filled = el("span","stock");
+  const split = scale.position(factory);
+  filled.style.width = split + "%";
+  track.append(filled);
+  const numbers = el("div","numbers",format(factory));
+  if (ceiling > factory) {
+    const extension = el("span","extend");
+    extension.style.left = split + "%";
+    extension.style.width = (scale.position(ceiling) - split) + "%";
+    track.append(extension);
+    numbers.append(el("small","", " / "),el("b","",format(ceiling)));
+    if (precision === "FP16" && card.category !== "ada") {
+      const marker = el("span","marker");
+      marker.style.left = scale.position(0.8 * ceiling) + "%";
+      track.append(marker);
+      row.title = t.software + " · " + format(0.8 * ceiling) + " TFLOP/s";
+    }
+  }
+  row.setAttribute("aria-label",[model,t.factory,format(factory),...(ceiling>factory?[t.limit,format(ceiling)]:[]),row.title].filter(Boolean).join(" · "));
+  row.append(info, track, numbers);
+  return row;
+}
+function render() {
+  const t = copy[lang];
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  document.title = t.title + " · blackwell-unlock-research";
+  for (const node of document.querySelectorAll("[data-i]")) node.textContent = t[node.dataset.i];
+  byId("language").textContent = lang === "zh" ? "English" : "中文";
+  const local = location.protocol === "file:";
+  byId("localReport").hidden = !local;
+  if (local) byId("refs").href = lang === "zh" ? "references.cn.md" : "references.md";
+  if (local) byId("measure").href = "../reports/gb205-2f18/README" + (lang === "zh" ? ".cn" : "") + ".md";
+  byId("precision").setAttribute("aria-label",t.precision);
+  for (const button of byId("precision").children) button.setAttribute("aria-pressed",String(button.textContent === precision));
+  const visible = gpuList.filter(card => {
+    if (card.category === "laptop") return byId("laptop").checked;
+    if (card.category === "pro") return byId("pro").checked;
+    if (["dc","soc"].includes(card.category)) return byId("systems").checked;
+    return true;
+  }).map(card => ({card,...peaks(card,precision)})).sort((a,b) => b.ceiling-a.ceiling || a.card.model.localeCompare(b.card.model));
+  const log = byId("log").checked;
+  const scale = makeScale(visible[0].ceiling,log);
+  const number = new Intl.NumberFormat(lang,{minimumFractionDigits:1,maximumFractionDigits:1});
+  const flagship = peaks(gpuList.find(card => card.model === "RTX 5090"),precision);
+  const tensor = precision !== "FP32";
+  byId("sampleTitle").textContent = "RTX 5090 · " + precision + " · " + (tensor?t.acc:t.core);
+  byId("sample").replaceChildren(number.format(flagship.factory));
+  if (tensor) byId("sample").append(el("span",""," → "),number.format(flagship.ceiling));
+  byId("sampleNote").textContent = (tensor?t.factoryTo:t.factoryOnly) + " · TFLOP/s";
+  byId("chartTitle").textContent = precision + " · " + t.chart;
+  byId("count").textContent = visible.length + " " + t.sorted;
+  byId("unit").textContent = t.units;
+  byId("extraKey").style.display = tensor ? "" : "none";
+  byId("markerKey").style.display = precision === "FP16" ? "" : "none";
+  byId("ticks").replaceChildren(...scale.ticks.map(value => {
+    const tick = el("span","",String(value));
+    tick.style.left = scale.position(value) + "%";
+    return tick;
+  }));
+  byId("rows").replaceChildren(...visible.map(item => chartRow(item,scale,number.format,t)));
+  byId("fp16Note").hidden = precision !== "FP16";
+  byId("fp16Note").textContent = lang === "zh"
+    ? "标线是全程 FP16 累加的参考。GB205 分块算子实测为 0.58×（K 块 2048）或 0.65×（K 块 4096），分块越小，误差越低。"
+    : "The marker represents full-length FP16 accumulation. The GB205 chunked operator measured 0.58× at chunk size 2048 and 0.65× at 4096, with lower error at 2048.";
+  byId("chartNote").textContent = (log?t.logarithmic:t.linear) + " · " + t.note;
+}
+for (const mode of precisions) {
+  const button = el("button","",mode);
+  button.type = "button";
+  button.onclick = () => { precision = mode; render(); };
+  byId("precision").append(button);
+}
+for (const control of document.querySelectorAll("input")) control.onchange = render;
+byId("language").onclick = () => { lang = lang === "en" ? "zh" : "en"; location.hash = lang; render(); };
+window.addEventListener("hashchange", () => { if (["#zh","#en"].includes(location.hash)) { lang = location.hash.slice(1); render(); } });
+render();
+</script></body></html>
