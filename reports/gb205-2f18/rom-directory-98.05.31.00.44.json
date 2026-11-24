@@ -1,0 +1,860 @@
+{
+  "schema": "blackwell-abi-lab/rom-directory/1",
+  "note": "Object ids, offsets and sizes only; hashes were verified locally and are not stored.",
+  "specimen": {
+    "gpu": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+    "die": "GB205",
+    "pci": "10de:2f18",
+    "subsystem": "1558:6586",
+    "vbios": "98.05.31.00.44",
+    "rom_size": 1961983,
+    "rom_sha256": "06f94e60c400414cade6f28ebd8c4c2536fd66b5ef22ad094d9f41bea0e2813d"
+  },
+  "directories": [
+    {
+      "offset": "0x3465a",
+      "device": "0x2f18",
+      "digest_ok": true,
+      "digest": "verified",
+      "hashes_ok": 2,
+      "hashes_failed": [],
+      "objects": [
+        {
+          "id": "0xbb",
+          "offset": "0x346e2",
+          "size": "0x22"
+        },
+        {
+          "id": "0xc5",
+          "offset": "0x34704",
+          "size": "0x344"
+        }
+      ]
+    },
+    {
+      "offset": "0x3505a",
+      "device": "0x2f18",
+      "digest_ok": true,
+      "digest": "verified",
+      "hashes_ok": 4,
+      "hashes_failed": [],
+      "objects": [
+        {
+          "id": "0xbc",
+          "offset": "0x3515a",
+          "size": "0x22"
+        },
+        {
+          "id": "0xc4",
+          "offset": "0x3517c",
+          "size": "0x84"
+        },
+        {
+          "id": "0x4e",
+          "offset": "0x35200",
+          "size": "0x30"
+        },
+        {
+          "id": "0x8c",
+          "offset": "0x35230",
+          "size": "0x38"
+        }
+      ]
+    },
+    {
+      "offset": "0x3585a",
+      "device": "0x2f18",
+      "digest_ok": true,
+      "digest": "verified",
+      "hashes_ok": 35,
+      "hashes_failed": [],
+      "objects": [
+        {
+          "id": "0xfa",
+          "offset": "0x3609e",
+          "size": "0x2"
+        },
+        {
+          "id": "0xbd",
+          "offset": "0x360a0",
+          "size": "0xd4"
+        },
+        {
+          "id": "0x4f",
+          "offset": "0x36174",
+          "size": "0x7c"
+        },
+        {
+          "id": "0x2d",
+          "offset": "0x361f0",
+          "size": "0x84"
+        },
+        {
+          "id": "0x01",
+          "offset": "0x36274",
+          "size": "0x10"
+        },
+        {
+          "id": "0x69",
+          "offset": "0x36284",
+          "size": "0x258"
+        },
+        {
+          "id": "0x2e",
+          "offset": "0x364dc",
+          "size": "0xa0"
+        },
+        {
+          "id": "0xd9",
+          "offset": "0x3657c",
+          "size": "0x3590"
+        },
+        {
+          "id": "0xda",
+          "offset": "0x39b0c",
+          "size": "0x9b"
+        },
+        {
+          "id": "0x35",
+          "offset": "0x39ba7",
+          "size": "0x48d"
+        },
+        {
+          "id": "0xdb",
+          "offset": "0x39ba7",
+          "size": "0x10"
+        },
+        {
+          "id": "0xc9",
+          "offset": "0x39bfb",
+          "size": "0x3a"
+        },
+        {
+          "id": "0x09",
+          "offset": "0x39c25",
+          "size": "0x10"
+        },
+        {
+          "id": "0x85",
+          "offset": "0x39c35",
+          "size": "0xde"
+        },
+        {
+          "id": "0x0a",
+          "offset": "0x39d13",
+          "size": "0x187"
+        },
+        {
+          "id": "0x22",
+          "offset": "0x39e9a",
+          "size": "0x104"
+        },
+        {
+          "id": "0x21",
+          "offset": "0x39f9e",
+          "size": "0x87"
+        },
+        {
+          "id": "0x23",
+          "offset": "0x3a025",
+          "size": "0x9"
+        },
+        {
+          "id": "0x29",
+          "offset": "0x3a02e",
+          "size": "0x6"
+        },
+        {
+          "id": "0x28",
+          "offset": "0x3a031",
+          "size": "0x33"
+        },
+        {
+          "id": "0x78",
+          "offset": "0x3a034",
+          "size": "0xef"
+        },
+        {
+          "id": "0x5c",
+          "offset": "0x3a123",
+          "size": "0x21"
+        },
+        {
+          "id": "0x02",
+          "offset": "0x3a144",
+          "size": "0x10e"
+        },
+        {
+          "id": "0x0d",
+          "offset": "0x3a252",
+          "size": "0x10"
+        },
+        {
+          "id": "0xdc",
+          "offset": "0x3a262",
+          "size": "0x56d"
+        },
+        {
+          "id": "0x2c",
+          "offset": "0x3a7cf",
+          "size": "0xa3"
+        },
+        {
+          "id": "0x65",
+          "offset": "0x3a872",
+          "size": "0x42"
+        },
+        {
+          "id": "0x66",
+          "offset": "0x3a8b4",
+          "size": "0x85"
+        },
+        {
+          "id": "0x67",
+          "offset": "0x3a939",
+          "size": "0x45"
+        },
+        {
+          "id": "0xdd",
+          "offset": "0x3a97e",
+          "size": "0x2631"
+        },
+        {
+          "id": "0xc8",
+          "offset": "0x3cfaf",
+          "size": "0x2"
+        },
+        {
+          "id": "0xde",
+          "offset": "0x3cfb1",
+          "size": "0xf"
+        },
+        {
+          "id": "0xe0",
+          "offset": "0x3cfc0",
+          "size": "0x7374"
+        },
+        {
+          "id": "0xdf",
+          "offset": "0x44334",
+          "size": "0x22"
+        },
+        {
+          "id": "0xe1",
+          "offset": "0x44334",
+          "size": "0xaac"
+        }
+      ]
+    },
+    {
+      "offset": "0x4525a",
+      "device": "0x2b80",
+      "digest_ok": true,
+      "digest": "verified",
+      "hashes_ok": 3,
+      "hashes_failed": [],
+      "objects": [
+        {
+          "id": "0xce",
+          "offset": "0x4531e",
+          "size": "0x2"
+        },
+        {
+          "id": "0xc6",
+          "offset": "0x45320",
+          "size": "0x30"
+        },
+        {
+          "id": "0x55",
+          "offset": "0x45350",
+          "size": "0x17943"
+        }
+      ]
+    },
+    {
+      "offset": "0x5d25a",
+      "device": "0x2f18",
+      "digest_ok": true,
+      "digest": "verified",
+      "hashes_ok": 107,
+      "hashes_failed": [],
+      "objects": [
+        {
+          "id": "0xfb",
+          "offset": "0x5eb7e",
+          "size": "0x2"
+        },
+        {
+          "id": "0xbe",
+          "offset": "0x5eb80",
+          "size": "0x211"
+        },
+        {
+          "id": "0xc8",
+          "offset": "0x5ed91",
+          "size": "0x2"
+        },
+        {
+          "id": "0xde",
+          "offset": "0x5ed93",
+          "size": "0xf"
+        },
+        {
+          "id": "0xab",
+          "offset": "0x5eda2",
+          "size": "0x79cb"
+        },
+        {
+          "id": "0x23",
+          "offset": "0x6676d",
+          "size": "0xc0f"
+        },
+        {
+          "id": "0x35",
+          "offset": "0x6676d",
+          "size": "0xc0f"
+        },
+        {
+          "id": "0xd2",
+          "offset": "0x6676d",
+          "size": "0xc0f"
+        },
+        {
+          "id": "0x51",
+          "offset": "0x6737c",
+          "size": "0x11"
+        },
+        {
+          "id": "0x04",
+          "offset": "0x6738d",
+          "size": "0x49f"
+        },
+        {
+          "id": "0x73",
+          "offset": "0x6782c",
+          "size": "0xb3"
+        },
+        {
+          "id": "0xdf",
+          "offset": "0x678df",
+          "size": "0x4f20"
+        },
+        {
+          "id": "0x52",
+          "offset": "0x6c800",
+          "size": "0x100"
+        },
+        {
+          "id": "0x53",
+          "offset": "0x6c900",
+          "size": "0x54"
+        },
+        {
+          "id": "0x70",
+          "offset": "0x6c954",
+          "size": "0x184"
+        },
+        {
+          "id": "0x71",
+          "offset": "0x6cad8",
+          "size": "0x244"
+        },
+        {
+          "id": "0x72",
+          "offset": "0x6cd1c",
+          "size": "0x887"
+        },
+        {
+          "id": "0x27",
+          "offset": "0x6d5a3",
+          "size": "0x105"
+        },
+        {
+          "id": "0x0e",
+          "offset": "0x6d6a8",
+          "size": "0x1ab"
+        },
+        {
+          "id": "0x15",
+          "offset": "0x6d853",
+          "size": "0x2fb"
+        },
+        {
+          "id": "0x18",
+          "offset": "0x6db4e",
+          "size": "0xe"
+        },
+        {
+          "id": "0x0f",
+          "offset": "0x6db5c",
+          "size": "0x3335"
+        },
+        {
+          "id": "0x10",
+          "offset": "0x70e91",
+          "size": "0x2766"
+        },
+        {
+          "id": "0x24",
+          "offset": "0x735f7",
+          "size": "0x60"
+        },
+        {
+          "id": "0x37",
+          "offset": "0x73657",
+          "size": "0x42"
+        },
+        {
+          "id": "0x38",
+          "offset": "0x73699",
+          "size": "0x4a"
+        },
+        {
+          "id": "0x39",
+          "offset": "0x736e3",
+          "size": "0x23"
+        },
+        {
+          "id": "0x3a",
+          "offset": "0x73706",
+          "size": "0x57"
+        },
+        {
+          "id": "0x3c",
+          "offset": "0x7375d",
+          "size": "0x53"
+        },
+        {
+          "id": "0x5d",
+          "offset": "0x737b0",
+          "size": "0x1c"
+        },
+        {
+          "id": "0x3d",
+          "offset": "0x737cc",
+          "size": "0x1b"
+        },
+        {
+          "id": "0xb1",
+          "offset": "0x737e7",
+          "size": "0x1e"
+        },
+        {
+          "id": "0x3e",
+          "offset": "0x73805",
+          "size": "0x6f"
+        },
+        {
+          "id": "0xb0",
+          "offset": "0x73874",
+          "size": "0xd"
+        },
+        {
+          "id": "0xaf",
+          "offset": "0x73881",
+          "size": "0x145"
+        },
+        {
+          "id": "0x5e",
+          "offset": "0x739c6",
+          "size": "0x4c"
+        },
+        {
+          "id": "0x7e",
+          "offset": "0x73a12",
+          "size": "0x11"
+        },
+        {
+          "id": "0x7f",
+          "offset": "0x73a23",
+          "size": "0x21"
+        },
+        {
+          "id": "0x8e",
+          "offset": "0x73a44",
+          "size": "0x65"
+        },
+        {
+          "id": "0xb4",
+          "offset": "0x73aa9",
+          "size": "0x14"
+        },
+        {
+          "id": "0xb5",
+          "offset": "0x73abd",
+          "size": "0x14"
+        },
+        {
+          "id": "0xb6",
+          "offset": "0x73ad1",
+          "size": "0x14"
+        },
+        {
+          "id": "0xb7",
+          "offset": "0x73ae5",
+          "size": "0x14"
+        },
+        {
+          "id": "0xb8",
+          "offset": "0x73af9",
+          "size": "0xe"
+        },
+        {
+          "id": "0xb9",
+          "offset": "0x73b07",
+          "size": "0x76"
+        },
+        {
+          "id": "0xba",
+          "offset": "0x73b7d",
+          "size": "0xa"
+        },
+        {
+          "id": "0x14",
+          "offset": "0x73b87",
+          "size": "0x184f1"
+        },
+        {
+          "id": "0x12",
+          "offset": "0x8c078",
+          "size": "0x528"
+        },
+        {
+          "id": "0x16",
+          "offset": "0x8c5a0",
+          "size": "0x97d"
+        },
+        {
+          "id": "0x13",
+          "offset": "0x8cf1d",
+          "size": "0x9e7"
+        },
+        {
+          "id": "0x17",
+          "offset": "0x8d904",
+          "size": "0x118"
+        },
+        {
+          "id": "0x19",
+          "offset": "0x8da1c",
+          "size": "0x2a9"
+        },
+        {
+          "id": "0x1b",
+          "offset": "0x8dcc5",
+          "size": "0x2dc"
+        },
+        {
+          "id": "0x84",
+          "offset": "0x8dfa1",
+          "size": "0xf"
+        },
+        {
+          "id": "0x11",
+          "offset": "0x8dfb0",
+          "size": "0x1ea"
+        },
+        {
+          "id": "0x25",
+          "offset": "0x8e19a",
+          "size": "0x24"
+        },
+        {
+          "id": "0x95",
+          "offset": "0x8e1be",
+          "size": "0x46"
+        },
+        {
+          "id": "0x1d",
+          "offset": "0x8e204",
+          "size": "0x71"
+        },
+        {
+          "id": "0x1e",
+          "offset": "0x8e275",
+          "size": "0x235"
+        },
+        {
+          "id": "0x20",
+          "offset": "0x8e4aa",
+          "size": "0x18"
+        },
+        {
+          "id": "0x80",
+          "offset": "0x8e4c2",
+          "size": "0x38"
+        },
+        {
+          "id": "0x83",
+          "offset": "0x8e4fa",
+          "size": "0x1c"
+        },
+        {
+          "id": "0x0b",
+          "offset": "0x8e516",
+          "size": "0x6a"
+        },
+        {
+          "id": "0x0c",
+          "offset": "0x8e580",
+          "size": "0x82e"
+        },
+        {
+          "id": "0x05",
+          "offset": "0x8edae",
+          "size": "0xe4"
+        },
+        {
+          "id": "0x63",
+          "offset": "0x8ee92",
+          "size": "0x2d1"
+        },
+        {
+          "id": "0x03",
+          "offset": "0x8f163",
+          "size": "0xca"
+        },
+        {
+          "id": "0x74",
+          "offset": "0x8f22d",
+          "size": "0x64"
+        },
+        {
+          "id": "0x75",
+          "offset": "0x8f291",
+          "size": "0xb3"
+        },
+        {
+          "id": "0x76",
+          "offset": "0x8f344",
+          "size": "0xa6"
+        },
+        {
+          "id": "0x68",
+          "offset": "0x8f3ea",
+          "size": "0x9af"
+        },
+        {
+          "id": "0x5f",
+          "offset": "0x8fd99",
+          "size": "0xe8"
+        },
+        {
+          "id": "0x60",
+          "offset": "0x8fe81",
+          "size": "0x47a"
+        },
+        {
+          "id": "0x61",
+          "offset": "0x902fb",
+          "size": "0x5f"
+        },
+        {
+          "id": "0x62",
+          "offset": "0x9035a",
+          "size": "0x97"
+        },
+        {
+          "id": "0x96",
+          "offset": "0x903f1",
+          "size": "0x8"
+        },
+        {
+          "id": "0x90",
+          "offset": "0x903f9",
+          "size": "0x1b"
+        },
+        {
+          "id": "0x3f",
+          "offset": "0x90414",
+          "size": "0x268"
+        },
+        {
+          "id": "0x81",
+          "offset": "0x9067c",
+          "size": "0x3c"
+        },
+        {
+          "id": "0x82",
+          "offset": "0x906b8",
+          "size": "0x10d"
+        },
+        {
+          "id": "0x7a",
+          "offset": "0x907c5",
+          "size": "0xaf5"
+        },
+        {
+          "id": "0x7b",
+          "offset": "0x912ba",
+          "size": "0xfa3c"
+        },
+        {
+          "id": "0x7c",
+          "offset": "0xa0cf6",
+          "size": "0x2e9"
+        },
+        {
+          "id": "0x44",
+          "offset": "0xa0fdf",
+          "size": "0x24a"
+        },
+        {
+          "id": "0x06",
+          "offset": "0xa1229",
+          "size": "0x193"
+        },
+        {
+          "id": "0x7d",
+          "offset": "0xa13bc",
+          "size": "0x58f"
+        },
+        {
+          "id": "0x91",
+          "offset": "0xa194b",
+          "size": "0x43f"
+        },
+        {
+          "id": "0x92",
+          "offset": "0xa1d8a",
+          "size": "0xb8"
+        },
+        {
+          "id": "0xad",
+          "offset": "0xa1e42",
+          "size": "0x2d"
+        },
+        {
+          "id": "0x93",
+          "offset": "0xa1e6f",
+          "size": "0x58e"
+        },
+        {
+          "id": "0x94",
+          "offset": "0xa23fd",
+          "size": "0xe"
+        },
+        {
+          "id": "0xa8",
+          "offset": "0xa240b",
+          "size": "0x23"
+        },
+        {
+          "id": "0xa7",
+          "offset": "0xa242e",
+          "size": "0x155"
+        },
+        {
+          "id": "0xe3",
+          "offset": "0xa2583",
+          "size": "0x1e"
+        },
+        {
+          "id": "0x2b",
+          "offset": "0xa25a1",
+          "size": "0xd8"
+        },
+        {
+          "id": "0x89",
+          "offset": "0xa2679",
+          "size": "0xad74"
+        },
+        {
+          "id": "0x8a",
+          "offset": "0xad3ed",
+          "size": "0x790"
+        },
+        {
+          "id": "0x26",
+          "offset": "0xadb7d",
+          "size": "0x1b"
+        },
+        {
+          "id": "0x6f",
+          "offset": "0xadb98",
+          "size": "0x8"
+        },
+        {
+          "id": "0xae",
+          "offset": "0xadba0",
+          "size": "0x27"
+        },
+        {
+          "id": "0xe4",
+          "offset": "0xadbc7",
+          "size": "0xc"
+        },
+        {
+          "id": "0x41",
+          "offset": "0xadbd3",
+          "size": "0x101"
+        },
+        {
+          "id": "0x36",
+          "offset": "0xadcd4",
+          "size": "0x20650"
+        },
+        {
+          "id": "0x87",
+          "offset": "0xce324",
+          "size": "0x21040"
+        },
+        {
+          "id": "0x88",
+          "offset": "0xef364",
+          "size": "0x558c"
+        },
+        {
+          "id": "0x9e",
+          "offset": "0xf48f0",
+          "size": "0x27050"
+        },
+        {
+          "id": "0x54",
+          "offset": "0x11b940",
+          "size": "0x1"
+        }
+      ]
+    },
+    {
+      "offset": "0x11be5a",
+      "device": "0x2b80",
+      "digest_ok": true,
+      "digest": "verified",
+      "hashes_ok": 2,
+      "hashes_failed": [],
+      "objects": [
+        {
+          "id": "0xd7",
+          "offset": "0x11bee2",
+          "size": "0x22"
+        },
+        {
+          "id": "0x86",
+          "offset": "0x11bf04",
+          "size": "0xc3a0"
+        }
+      ]
+    },
+    {
+      "offset": "0x12885a",
+      "device": "0x2b80",
+      "digest_ok": true,
+      "digest": "verified",
+      "hashes_ok": 2,
+      "hashes_failed": [],
+      "objects": [
+        {
+          "id": "0xc0",
+          "offset": "0x1288e2",
+          "size": "0x22"
+        },
+        {
+          "id": "0x9f",
+          "offset": "0x128904",
+          "size": "0x2ac50"
+        }
+      ]
+    }
+  ]
+}

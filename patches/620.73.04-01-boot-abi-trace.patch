@@ -1,0 +1,112 @@
+blackwell-abi-lab: read-only boot ABI trace for GB20x (RFC)
+
+Status   : RFC, not run on real hardware.
+           Applies cleanly to the commit below; src/nvidia (nv-kernel.o) compiles
+           with gcc 15.2.0 without warnings. The .ko files were not linked or loaded.
+Upstream : https://github.com/NVIDIA/open-gpu-kernel-modules
+Tag      : 620.73.04
+Commit   : a4b95f6a2db0bba10ccaccef79190a3c18dcf14a
+Scope    : adds log lines only. No register access, no module parameter, no change to
+           any value handed to firmware. Each dump is taken from a private copy.
+Privacy  : system physical addresses are reduced to their low 12 bits; hashes, public
+           keys and signatures are never printed.
+Output   : "BWLAB:" lines in dmesg. Decode them with
+           python3 scripts/abi-layout.py --from-log <dmesg text>
+
+diff --git a/src/nvidia/src/kernel/gpu/fsp/arch/hopper/kern_fsp_gh100.c b/src/nvidia/src/kernel/gpu/fsp/arch/hopper/kern_fsp_gh100.c
+index 2473627..2301599 100644
+--- a/src/nvidia/src/kernel/gpu/fsp/arch/hopper/kern_fsp_gh100.c
++++ b/src/nvidia/src/kernel/gpu/fsp/arch/hopper/kern_fsp_gh100.c
+@@ -1580,6 +1580,11 @@ kfspSendBootCommands_GH100
+         goto failed;
+     }
+ 
++    // BWLAB (blackwell-abi-lab, RFC): log-only. Lengths only, no key material or addresses.
++    NV_PRINTF(LEVEL_ERROR, "BWLAB: cot version=%u size=%u frtsSysmemSize=0x%x frtsVidmemSize=0x%x\n",
++        (NvU32)pKernelFsp->pCotPayload->version, (NvU32)pKernelFsp->pCotPayload->size,
++        pKernelFsp->pCotPayload->frtsSysmemSize, pKernelFsp->pCotPayload->frtsVidmemSize);
++
+     //
+     // Need to check if GSP has been booted here so that we can skip booting
+     // GSP again later in ACR code path. On GSP-RM, the calling code path (kgsp)
+diff --git a/src/nvidia/src/kernel/gpu/gsp/arch/hopper/kernel_gsp_gh100.c b/src/nvidia/src/kernel/gpu/gsp/arch/hopper/kernel_gsp_gh100.c
+index f1705c7..f1bcff8 100644
+--- a/src/nvidia/src/kernel/gpu/gsp/arch/hopper/kernel_gsp_gh100.c
++++ b/src/nvidia/src/kernel/gpu/gsp/arch/hopper/kernel_gsp_gh100.c
+@@ -51,6 +51,38 @@
+ 
+ #include "gpu/tdisp/tdisp_mgr.h"
+ 
++//
++// BWLAB (blackwell-abi-lab, RFC): log-only boot ABI trace.
++//
++// Callers pass a private copy with system physical addresses already reduced to
++// their low 12 bits; the structure handed to firmware is never written here.
++// Every row carries its offset, so nvDbg_vPrintf() cannot coalesce repeated rows.
++//
++#define BWLAB_TRACE_TAG       "620.73.04"
++#define BWLAB_PAGE_OFFSET(a)  ((a) & 0xfffULL)
++
++static void
++_kgspBwlabDump
++(
++    const char *pName,
++    const void *pCopy,
++    NvU32       size
++)
++{
++    const NvU8 *p = (const NvU8 *)pCopy;
++    NvU32       i;
++
++    NV_PRINTF(LEVEL_ERROR, "BWLAB: begin %s tag=%s size=%u\n", pName, BWLAB_TRACE_TAG, size);
++    for (i = 0; (i + 16) <= size; i += 16)
++    {
++        NV_PRINTF(LEVEL_ERROR,
++            "BWLAB: %04x: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
++            i, p[i + 0], p[i + 1], p[i + 2], p[i + 3], p[i + 4], p[i + 5], p[i + 6], p[i + 7],
++            p[i + 8], p[i + 9], p[i + 10], p[i + 11], p[i + 12], p[i + 13], p[i + 14], p[i + 15]);
++    }
++    NV_PRINTF(LEVEL_ERROR, "BWLAB: end %s\n", pName);
++}
++
+ #define RISCV_BR_ADDR_ALIGNMENT                 (8)
+ 
+ const char*
+@@ -454,6 +486,17 @@ kgspPopulateWprMeta_GH100
+         pWprMeta->flags &= ~GSP_FW_FLAGS_PPCIE_ENABLED;
+     }
+ 
++    {
++        GspFwWprMeta copy;
++
++        portMemCopy(&copy, sizeof(copy), pWprMeta, sizeof(*pWprMeta));
++        copy.sysmemAddrOfRadix3Elf        = BWLAB_PAGE_OFFSET(copy.sysmemAddrOfRadix3Elf);
++        copy.sysmemAddrOfBootloader       = BWLAB_PAGE_OFFSET(copy.sysmemAddrOfBootloader);
++        copy.sysmemAddrOfSignature        = BWLAB_PAGE_OFFSET(copy.sysmemAddrOfSignature);
++        copy.sysmemAddrOfCrashReportQueue = BWLAB_PAGE_OFFSET(copy.sysmemAddrOfCrashReportQueue);
++        _kgspBwlabDump("GspFwWprMeta", &copy, sizeof(copy));
++    }
++
+     return NV_OK;
+ }
+ 
+@@ -576,6 +619,19 @@ kgspSetupGspFmcArgs_GH100
+         pGspFmcBootParams->gspSpdmParams.payloadBufferSize    = pSpdm->payloadBufferSize;
+     }
+ 
++    {
++        GSP_FMC_BOOT_PARAMS copy;
++
++        portMemCopy(&copy, sizeof(copy), pGspFmcBootParams, sizeof(*pGspFmcBootParams));
++        copy.bootGspRmParams.gspRmDescOffset     = BWLAB_PAGE_OFFSET(copy.bootGspRmParams.gspRmDescOffset);
++        copy.gspRmParams.bootArgsOffset          = BWLAB_PAGE_OFFSET(copy.gspRmParams.bootArgsOffset);
++        copy.gspSpdmParams.payloadBufferOffset   = BWLAB_PAGE_OFFSET(copy.gspSpdmParams.payloadBufferOffset);
++        copy.gspRmMemParams.flushSysmemAddrValLo = (NvU32)BWLAB_PAGE_OFFSET(copy.gspRmMemParams.flushSysmemAddrValLo);
++        copy.gspRmMemParams.flushSysmemAddrValHi = 0;
++        NV_PRINTF(LEVEL_ERROR, "BWLAB: bootMode=%u\n", (NvU32)bootMode);
++        _kgspBwlabDump("GSP_FMC_BOOT_PARAMS", &copy, sizeof(copy));
++    }
++
+     return NV_OK;
+ }
+ 

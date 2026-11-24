@@ -1,0 +1,32 @@
+# Compiled & caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Strictly keep NVIDIA firmware assets, ROM dumps, and raw captures out of git
+*.rom
+*.bin
+*.fw
+*.elf
+*.ucode
+*.dmp
+*.raw
+*.tar.gz
+*.tgz
+*.zip
+*vbios*
+!docs/vbios-v6-descriptor.md
+!docs/vbios-v6-descriptor.cn.md
+!reports/**/bar0-prom-metadata*.txt
+
+# Local tool output (archived copies live under reports/<die>-<devid>/)
+/blackwell-report-*/
+/my-*-report/
+/*.json
+
+# Local scratch & raw logs
+*.log
+scratch/
+.DS_Store
+Thumbs.db

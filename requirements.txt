@@ -1,0 +1,10 @@
+# Only software/*.py and `scripts/verify-baseline.py --bench` need these packages.
+# Everything else (scripts/, tests/) runs on the Python standard library.
+#
+# Install a CUDA build of PyTorch first; on Windows plain PyPI gives a CPU-only build:
+#   python -m pip install torch --index-url https://download.pytorch.org/whl/cu128
+#
+# 2.7 is the first release with torch.backends.cuda.matmul.allow_fp16_accumulation.
+torch>=2.7
+# Provides the `pynvml` module. Optional: telemetry falls back to nvidia-smi without it.
+nvidia-ml-py

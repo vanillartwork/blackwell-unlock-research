@@ -1,0 +1,78 @@
+[GB205 field sample: NVIDIA GeForce RTX 5070 Ti Laptop GPU (10de:2f18, SUBSYS 1558:6586, VBIOS 98.05.31.00.44)]
+[Earlier capture of the same machine under driver 616.64 (32.0.16.1664), experimental read-only ssdiag 0.8.5 build]
+[Register rows only, copied verbatim from the raw capture. Omitted: host inventory, PROM section, PLM survey and probe rows not used by this repository. GSP/SEC2/PMU CAPS and HWCFG3 rows exist only in this experimental build.]
+[SM_ISSUE_RATE_MODIFIER and SEC2_PLM were not sampled by this build. Bracketed SS0/SS1 selector annotations on the 0x4096xx rows are a decoder artefact on PRIV_VIOLATION words.]
+
+GPU 1 PCI: 10de:2f18 SUBSYS 65861558 BDF 01:00.0
+GPU 1 family: outside the tu10x/ga10x/ad10x families - OUT-OF-SCOPE
+GPU 1 VBIOS: 98.05.31.00.44 (nvapi)
+GPU 1 driver: 32.0.16.1664 (616.64), dated 8-24-2026; EnableGpuFirmware unset (LEGACY mode)
+
+--- core/debug block ---
+  PMC_BOOT_0             0x00000000= 0x1b5000a1
+  PSTRAPS_SET0           0x00101000= 0x00400080
+  PSTRAPS_SET1           0x0010100c= 0x02013000
+  FB_SIZE_MIB            0x001183a4= 0x00002fc3
+  GFW_PLM                0x00118128= 0x00008b8f
+  GFW_SCRATCH            0x00118234= 0x00000000
+  BSI_SCRATCH15          0x001180fc= 0x00001182
+  VGA_WORKSPACE          0x00625f04= 0x00000001
+  WPR2_LO                0x001fa824= 0x02fa7e00
+  WPR2_HI                0x001fa828= 0x02fb0400
+  MMU_PLM                0x001fa7c8= 0x0884cb8f
+  MMU_LOCK_LO            0x001fa82c= 0x000ffff0
+  MMU_LOCK_HI            0x001fa830= 0x00000000
+  GSP_CPUCTL             0x00110100= 0xbadf5720 [BADF]
+  GSP_CAPS               0x00110108= 0x80420100
+  GSP_HWCFG3             0x001100f0= 0x00000f00
+  GSP_EXCI               0x001100d0= 0xbadf5720 [BADF]
+  SEC2_CPUCTL            0x00840100= 0x00000010
+  SEC2_CAPS              0x00840108= 0x80420100
+  SEC2_HWCFG3            0x008400f0= 0x00000f00
+  SEC2_MBOX0             0x00840040= 0xbf7b2000
+  SEC2_MBOX1             0x00840044= 0x94000008
+  SEC2_EXCI              0x008400d0= 0xbadf5720 [BADF]
+  PMU_CPUCTL             0x0010a100= 0xbadf5040 [PRIV_VIOLATION]
+  PMU_CAPS               0x0010a108= 0xbadf5040 [PRIV_VIOLATION]
+  PMU_HWCFG3             0x0010a0f0= 0xbadf5040 [PRIV_VIOLATION]
+  PMU_EXCI               0x0010a0d0= 0xbadf5040 [PRIV_VIOLATION]
+  PMU_MBOX0              0x0010a040= 0xbadf5040 [PRIV_VIOLATION]
+  PMU_MBOX1              0x0010a044= 0xbadf5040 [PRIV_VIOLATION]
+  FUSE_VER_DECODE        0x008241c0= 0x00000002
+
+--- FEAT cluster (all mapped families, cross-visibility) ---
+  turing 0x4096xx      PLM       0x00409650= 0x8087cbcf (closed (non-standard))
+  turing 0x4096xx      SS0       0x00409664= 0xbadf5040 [. r4 . r5 ?7* ?5* 1/4* 1/8*]
+  turing 0x4096xx      READOUT   0x00409668= 0xbadf5040 [PRIV_VIOLATION]
+  turing 0x4096xx      SS1       0x0040966c= 0xbadf5040 [.]
+  0x823xxx amp/ada/gb  PLM       0x00823804= 0xfffffb8f (closed (PL3-only writes))
+  0x823xxx amp/ada/gb  SS0       0x0082381c= 0x56027063 [r3 r6 . r7 r2 . r6 r5]
+  0x823xxx amp/ada/gb  SS1       0x00823820= 0x00032004 [r4]
+  0x823xxx amp/ada/gb  READOUT_1 0x00823818= 0x00c36180 [fields 0 0 3 0 3 3 0 3 0 - not rates]
+
+--- blackwell fuse/aux block (read-only; selectors are fuse mirrors) ---
+  TPC_CTRL (0x820838+4g, 12 GPCs): 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000
+  FUSE_EN_SW_OVERRIDE        = 0x00000000
+  FUSE_SS_PLM                = 0xfffffbff
+  SECURE_FEAT_OVR_QUADRO_WR  = 0x00000002
+  FUSE_SS_DP                 = 0x00000000
+  FUSE_SS_FFMA               = 0x00000000
+  FUSE_SS_FMLA16             = 0x00000000
+  FUSE_SS_FMLA32             = 0x00000003
+  FUSE_SS_IMLA0              = 0x00000000
+  FUSE_SS_IMLA1              = 0x00000003
+  FUSE_SS_IMLA2              = 0x00000003
+  FUSE_SS_IMLA3              = 0x00000000
+  FUSE_SS_IMLA4              = 0x00000003
+  READOUT_1 fields (imla0 fmla16 fmla32 ffma imla1 imla2 imla3 imla4 DP) = 0 0 3 0 3 3 0 3 0
+
+--- ampere/ada FEAT sweep (M1 cluster) ---
+         0x00823800 0x00823808 0x0082380c 0x00823810 0x00823814 0x00823824 0x00823828 0x0082382c 0x00823b00
+   value 0xfffffb8f 0x00100183 0x00888888 0xaa2a2aaa 0x00000233 0x00000003 0x00000001 0x022aaaaa 0xfffffb8f
+
+--- other ---
+  FUSE_OPT_FEATURE_OVR   0x008203f0= 0x00000000
+  FUSE_VER               0x00824140= 0x00000002
+  status-opt STAT_GPC                   0x00820c1c= 0x00000fe0
+  GR_TOPO_409604 0x00409604 = 0x06030005 (byte3 GPC-slots 6 / byte0 active-GPC 5; anchors 06030005/08040003/08040006)
+VERDICT [blackwell-gb2]: NOT_UNLOCKED

@@ -1,0 +1,324 @@
+{
+  "schema": "blackwell-abi-lab/v6-descriptors/1",
+  "note": "Decoded scalars and lengths only; no raw firmware bytes. The opaque 28-byte descriptor tail is omitted.",
+  "specimen": {
+    "die": "GB203",
+    "pci": "10de:2c05",
+    "vbios": "98.03.58.40.B6",
+    "rom_size": 1961983,
+    "rom_sha256": "fef2462b0935bda527622bd6f6eda08afc47408e8e4af16707dd8b3c734b0dd2",
+    "image_base": "0x35400",
+    "expansion": "0x18000",
+    "adjust": "0x4d400",
+    "bit_offset": "0x361f0",
+    "ucode_table_offset": "0x9a6ad",
+    "ucode_slots": 35,
+    "ucode_empty_slots": 29
+  },
+  "descriptors": [
+    {
+      "app": "0x07",
+      "target": "0x06",
+      "descriptor_offset": "0xa55c8",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 131584,
+      "flags": "0x1d",
+      "fields": {
+        "04": "0x00020200",
+        "08": "0x00000000",
+        "0C": "0x0001d600",
+        "10": "0x00000000",
+        "14": "0x00001100",
+        "18": "0x00000200",
+        "1C": "0x00000000",
+        "20": "0x00001100",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x05000000",
+        "30": "0x11000000"
+      }
+    },
+    {
+      "app": "0x19",
+      "target": "0x01",
+      "descriptor_offset": "0xc5818",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 141824,
+      "flags": "0x05",
+      "fields": {
+        "04": "0x00022a00",
+        "08": "0x00009200",
+        "0C": "0x0001d500",
+        "10": "0x00003700",
+        "14": "0x00005500",
+        "18": "0x000c0001",
+        "1C": "0x00000014",
+        "20": "0x00000000",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x04000000",
+        "30": "0x12000000"
+      }
+    },
+    {
+      "app": "0x15",
+      "target": "0x01",
+      "descriptor_offset": "0xe8358",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 23296,
+      "flags": "0x05",
+      "fields": {
+        "04": "0x00005b00",
+        "08": "0x00009200",
+        "0C": "0x00005200",
+        "10": "0x00003700",
+        "14": "0x00000900",
+        "18": "0x00030001",
+        "1C": "0x00000014",
+        "20": "0x00000000",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x04000000",
+        "30": "0x11000000"
+      }
+    },
+    {
+      "app": "0x23",
+      "target": "0x0e",
+      "descriptor_offset": "0xedee4",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 141824,
+      "flags": "0x1f",
+      "fields": {
+        "04": "0x00022a00",
+        "08": "0x00000000",
+        "0C": "0x00019800",
+        "10": "0x00000000",
+        "14": "0x00007800",
+        "18": "0x00000000",
+        "1C": "0x00000000",
+        "20": "0x00001000",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x4f4f0000",
+        "30": "0x42554842"
+      }
+    },
+    {
+      "app": "0x18",
+      "target": "0x01",
+      "descriptor_offset": "0x110f04",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 52224,
+      "flags": "0x1f",
+      "fields": {
+        "04": "0x0000cc00",
+        "08": "0x00000000",
+        "0C": "0x00009200",
+        "10": "0x00000000",
+        "14": "0x00001100",
+        "18": "0x00040101",
+        "1C": "0x01010014",
+        "20": "0x00001f00",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x04000000",
+        "30": "0x02000000"
+      }
+    },
+    {
+      "app": "0x24",
+      "target": "0x0f",
+      "descriptor_offset": "0x11e104",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 175104,
+      "flags": "0x0d",
+      "fields": {
+        "04": "0x0002ac00",
+        "08": "0x00015800",
+        "0C": "0x00026c00",
+        "10": "0x00001400",
+        "14": "0x00004000",
+        "18": "0x00000301",
+        "1C": "0x01030000",
+        "20": "0x00000000",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x50534600",
+        "30": "0x4e55525f"
+      }
+    }
+  ],
+  "manifests": [
+    {
+      "app": "0x19",
+      "outer_header": {
+        "00": "0x00350001",
+        "04": "0x000047a7",
+        "08": "0x000180d0",
+        "0C": "0x000004bd",
+        "10": "0x00001100"
+      },
+      "entries": [
+        {
+          "entry_id": "0x89",
+          "type": 1,
+          "field_a": "0x4d385",
+          "field_b": "0x8c00",
+          "field_c": "0xa564",
+          "field_d": "0xa564"
+        },
+        {
+          "entry_id": "0x12",
+          "type": 1,
+          "field_a": "0x3ec78",
+          "field_b": "0x191d0",
+          "field_c": "0x528",
+          "field_d": "0x52c",
+          "table_header": {
+            "version": 48,
+            "header_size": 24,
+            "record_size": 25,
+            "count": 11
+          }
+        },
+        {
+          "entry_id": "0x14",
+          "type": 1,
+          "field_a": "0x26787",
+          "field_b": "0x19700",
+          "field_c": "0x1cf1",
+          "field_d": "0x1cf5",
+          "table_header": {
+            "version": 48,
+            "header_size": 14,
+            "record_size": 29,
+            "count": 255
+          }
+        },
+        {
+          "entry_id": "0x02",
+          "type": 2,
+          "field_a": "0x15c60",
+          "field_b": "0x2470",
+          "field_c": "0x0",
+          "field_d": "0x0"
+        },
+        {
+          "entry_id": "0x03",
+          "type": 2,
+          "field_a": "0x15bf0",
+          "field_b": "0x70",
+          "field_c": "0x0",
+          "field_d": "0x0"
+        },
+        {
+          "entry_id": "0x81",
+          "type": 1,
+          "field_a": "0x4327c",
+          "field_b": "0x1b520",
+          "field_c": "0x3c",
+          "field_d": "0x40",
+          "table_header": {
+            "version": 16,
+            "header_size": 4,
+            "record_size": 14,
+            "count": 4
+          }
+        },
+        {
+          "entry_id": "0x82",
+          "type": 1,
+          "field_a": "0x432b8",
+          "field_b": "0x1b400",
+          "field_c": "0x10d",
+          "field_d": "0x111",
+          "table_header": {
+            "version": 16,
+            "header_size": 5,
+            "record_size": 33,
+            "count": 8
+          }
+        },
+        {
+          "entry_id": "0x70",
+          "type": 1,
+          "field_a": "0x1f554",
+          "field_b": "0x13790",
+          "field_c": "0x184",
+          "field_d": "0x184",
+          "table_header": {
+            "version": 16,
+            "header_size": 4,
+            "record_size": 64,
+            "count": 6
+          }
+        },
+        {
+          "entry_id": "0x71",
+          "type": 1,
+          "field_a": "0x1f6d8",
+          "field_b": "0x13548",
+          "field_c": "0x244",
+          "field_d": "0x244",
+          "table_header": {
+            "version": 16,
+            "header_size": 4,
+            "record_size": 96,
+            "count": 6
+          }
+        },
+        {
+          "entry_id": "0x72",
+          "type": 1,
+          "field_a": "0x1f91c",
+          "field_b": "0x13918",
+          "field_c": "0x887",
+          "field_d": "0x888"
+        },
+        {
+          "entry_id": "0xd2",
+          "type": 1,
+          "field_a": "0x1936d",
+          "field_b": "0x14fd0",
+          "field_c": "0xc0f",
+          "field_d": "0xc13"
+        }
+      ]
+    },
+    {
+      "app": "0x15",
+      "outer_header": {
+        "00": "0x00350001",
+        "04": "0x000047a7",
+        "08": "0x000057c0",
+        "0C": "0x000004bd",
+        "10": "0x00001100"
+      },
+      "entries": [
+        {
+          "entry_id": "0x8a",
+          "type": 1,
+          "field_a": "0x578e9",
+          "field_b": "0x4000",
+          "field_c": "0x788",
+          "field_d": "0x788"
+        },
+        {
+          "entry_id": "0xd2",
+          "type": 1,
+          "field_a": "0x1936d",
+          "field_b": "0x68c0",
+          "field_c": "0xc0f",
+          "field_d": "0xc13"
+        }
+      ]
+    }
+  ]
+}

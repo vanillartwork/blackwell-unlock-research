@@ -1,0 +1,326 @@
+{
+  "schema": "blackwell-abi-lab/v6-descriptors/1",
+  "note": "Decoded scalars and lengths only; no raw firmware bytes. The opaque 28-byte descriptor tail is omitted.",
+  "specimen": {
+    "gpu": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+    "die": "GB205",
+    "pci": "10de:2f18",
+    "subsystem": "1558:6586",
+    "vbios": "98.05.31.00.44",
+    "rom_size": 1961983,
+    "rom_sha256": "06f94e60c400414cade6f28ebd8c4c2536fd66b5ef22ad094d9f41bea0e2813d",
+    "image_base": "0x35400",
+    "expansion": "0x18000",
+    "adjust": "0x4d400",
+    "bit_offset": "0x361f0",
+    "ucode_table_offset": "0xa25a1",
+    "ucode_slots": 35,
+    "ucode_empty_slots": 29
+  },
+  "descriptors": [
+    {
+      "app": "0x07",
+      "target": "0x06",
+      "descriptor_offset": "0xadcd4",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 132608,
+      "flags": "0x1d",
+      "fields": {
+        "04": "0x00020600",
+        "08": "0x00000000",
+        "0C": "0x0001da00",
+        "10": "0x00000000",
+        "14": "0x00001100",
+        "18": "0x00000200",
+        "1C": "0x00000000",
+        "20": "0x00001100",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x05000000",
+        "30": "0x11000000"
+      }
+    },
+    {
+      "app": "0x19",
+      "target": "0x01",
+      "descriptor_offset": "0xce324",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 134912,
+      "flags": "0x05",
+      "fields": {
+        "04": "0x00020f00",
+        "08": "0x00008800",
+        "0C": "0x0001ba00",
+        "10": "0x00003800",
+        "14": "0x00005500",
+        "18": "0x000c0001",
+        "1C": "0x00000014",
+        "20": "0x00000000",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x04000000",
+        "30": "0x12000000"
+      }
+    },
+    {
+      "app": "0x15",
+      "target": "0x01",
+      "descriptor_offset": "0xef364",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 21760,
+      "flags": "0x05",
+      "fields": {
+        "04": "0x00005500",
+        "08": "0x00008800",
+        "0C": "0x00004c00",
+        "10": "0x00003800",
+        "14": "0x00000900",
+        "18": "0x00030001",
+        "1C": "0x00000014",
+        "20": "0x00000000",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x04000000",
+        "30": "0x11000000"
+      }
+    },
+    {
+      "app": "0x23",
+      "target": "0x0e",
+      "descriptor_offset": "0xf48f0",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 159744,
+      "flags": "0x1f",
+      "fields": {
+        "04": "0x00027000",
+        "08": "0x00000000",
+        "0C": "0x0001d000",
+        "10": "0x00000000",
+        "14": "0x00008800",
+        "18": "0x00000000",
+        "1C": "0x00000000",
+        "20": "0x00000e00",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x4f4f0000",
+        "30": "0x42554842"
+      }
+    },
+    {
+      "app": "0x18",
+      "target": "0x01",
+      "descriptor_offset": "0x11bf04",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 49920,
+      "flags": "0x1f",
+      "fields": {
+        "04": "0x0000c300",
+        "08": "0x00000000",
+        "0C": "0x00008800",
+        "10": "0x00000000",
+        "14": "0x00001200",
+        "18": "0x00040101",
+        "1C": "0x01010014",
+        "20": "0x00001f00",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x04000000",
+        "30": "0x02000000"
+      }
+    },
+    {
+      "app": "0x24",
+      "target": "0x0f",
+      "descriptor_offset": "0x128904",
+      "version": 6,
+      "header_size": 80,
+      "stored_size": 175104,
+      "flags": "0x0d",
+      "fields": {
+        "04": "0x0002ac00",
+        "08": "0x00015800",
+        "0C": "0x00026c00",
+        "10": "0x00001400",
+        "14": "0x00004000",
+        "18": "0x00000301",
+        "1C": "0x01030000",
+        "20": "0x00000000",
+        "24": "0x00000000",
+        "28": "0x01012801",
+        "2C": "0x50534600",
+        "30": "0x4e55525f"
+      }
+    }
+  ],
+  "manifests": [
+    {
+      "app": "0x19",
+      "outer_header": {
+        "00": "0x00350001",
+        "04": "0x000047a7",
+        "08": "0x000189e0",
+        "0C": "0x000004bd",
+        "10": "0x00001100"
+      },
+      "entries": [
+        {
+          "entry_id": "0x89",
+          "type": 1,
+          "field_a": "0x55279",
+          "field_b": "0x8d00",
+          "field_c": "0xad74",
+          "field_d": "0xad74"
+        },
+        {
+          "entry_id": "0x12",
+          "type": 1,
+          "field_a": "0x3ec78",
+          "field_b": "0x19ae0",
+          "field_c": "0x528",
+          "field_d": "0x52c",
+          "table_header": {
+            "version": 48,
+            "header_size": 24,
+            "record_size": 25,
+            "count": 11
+          }
+        },
+        {
+          "entry_id": "0x14",
+          "type": 1,
+          "field_a": "0x26787",
+          "field_b": "0x1a010",
+          "field_c": "0x1cf1",
+          "field_d": "0x1cf5",
+          "table_header": {
+            "version": 48,
+            "header_size": 14,
+            "record_size": 29,
+            "count": 255
+          }
+        },
+        {
+          "entry_id": "0x02",
+          "type": 2,
+          "field_a": "0x16570",
+          "field_b": "0x2470",
+          "field_c": "0x0",
+          "field_d": "0x0"
+        },
+        {
+          "entry_id": "0x03",
+          "type": 2,
+          "field_a": "0x16500",
+          "field_b": "0x70",
+          "field_c": "0x0",
+          "field_d": "0x0"
+        },
+        {
+          "entry_id": "0x81",
+          "type": 1,
+          "field_a": "0x4327c",
+          "field_b": "0x1be30",
+          "field_c": "0x3c",
+          "field_d": "0x40",
+          "table_header": {
+            "version": 16,
+            "header_size": 4,
+            "record_size": 14,
+            "count": 4
+          }
+        },
+        {
+          "entry_id": "0x82",
+          "type": 1,
+          "field_a": "0x432b8",
+          "field_b": "0x1bd10",
+          "field_c": "0x10d",
+          "field_d": "0x111",
+          "table_header": {
+            "version": 16,
+            "header_size": 5,
+            "record_size": 33,
+            "count": 8
+          }
+        },
+        {
+          "entry_id": "0x70",
+          "type": 1,
+          "field_a": "0x1f554",
+          "field_b": "0x140a0",
+          "field_c": "0x184",
+          "field_d": "0x184",
+          "table_header": {
+            "version": 16,
+            "header_size": 4,
+            "record_size": 64,
+            "count": 6
+          }
+        },
+        {
+          "entry_id": "0x71",
+          "type": 1,
+          "field_a": "0x1f6d8",
+          "field_b": "0x13e58",
+          "field_c": "0x244",
+          "field_d": "0x244",
+          "table_header": {
+            "version": 16,
+            "header_size": 4,
+            "record_size": 96,
+            "count": 6
+          }
+        },
+        {
+          "entry_id": "0x72",
+          "type": 1,
+          "field_a": "0x1f91c",
+          "field_b": "0x14228",
+          "field_c": "0x887",
+          "field_d": "0x888"
+        },
+        {
+          "entry_id": "0xd2",
+          "type": 1,
+          "field_a": "0x1936d",
+          "field_b": "0x158e0",
+          "field_c": "0xc0f",
+          "field_d": "0xc13"
+        }
+      ]
+    },
+    {
+      "app": "0x15",
+      "outer_header": {
+        "00": "0x00350001",
+        "04": "0x000047a7",
+        "08": "0x000058c0",
+        "0C": "0x000004bd",
+        "10": "0x00001100"
+      },
+      "entries": [
+        {
+          "entry_id": "0x8a",
+          "type": 1,
+          "field_a": "0x5ffed",
+          "field_b": "0x4100",
+          "field_c": "0x790",
+          "field_d": "0x790"
+        },
+        {
+          "entry_id": "0xd2",
+          "type": 1,
+          "field_a": "0x1936d",
+          "field_b": "0x69c0",
+          "field_c": "0xc0f",
+          "field_d": "0xc13"
+        }
+      ]
+    }
+  ]
+}

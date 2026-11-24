@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: GPL-2.0-only
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      # No GPU and no PyTorch on purpose: CUDA/torch tests skip themselves.
+      - run: python -B -m unittest discover -s tests -v
+
+  torch-cpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: python -B -m unittest tests.test_chunked_fp16_matmul -v
+
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n scripts/check-env.sh scripts/collect-report.sh
+      - run: shellcheck --severity=warning scripts/*.sh

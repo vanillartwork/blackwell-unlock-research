@@ -1,0 +1,192 @@
+{
+  "schema": "blackwell-abi-lab/chunked-fp16/1",
+  "timestamp_utc": "2026-11-23T19:26:42Z",
+  "info": {
+    "os": "Windows",
+    "os_release": "11",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8",
+    "gpu": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+    "compute_capability": [
+      12,
+      0
+    ],
+    "sm_count": 46,
+    "driver": "621.01",
+    "vbios": "98.05.31.00.44",
+    "pci_device_id": "0x2F1810DE",
+    "power_limit": "[N/A]",
+    "power_max_limit": "140.00 W"
+  },
+  "config": {
+    "n": 8192,
+    "chunks": [
+      512,
+      1024,
+      2048,
+      4096,
+      8192
+    ],
+    "warmup": 8,
+    "min_iters": 30,
+    "min_seconds": 2.0,
+    "seed": 1234
+  },
+  "results": [
+    {
+      "label": "baseline_fp32acc",
+      "iters": 84,
+      "median_ms": 24.826272010803223,
+      "tflops": 44.28822931197823,
+      "flop_clk_sm": 519.8637115219531,
+      "sample_finite": true,
+      "sample_relative_l2_error": 0.00019575465477501152,
+      "sm_clock_mhz": 1852.0,
+      "sm_clock_peak_mhz": 2062.0,
+      "power_w": 97.462,
+      "power_peak_w": 102.669,
+      "temperature_peak_c": 56.0,
+      "utilization_gpu_median_pct": 100.0,
+      "throttle_reasons_mask": 4,
+      "telemetry_samples": 42,
+      "telemetry_active_samples": 37,
+      "throttle_reasons": [
+        "software_power_cap"
+      ],
+      "chunk_k": null,
+      "speedup_vs_fp32acc": 1.0,
+      "error_ratio_vs_fp32acc": 1.0,
+      "error_reduction_vs_full_fp16acc": 16.572408884720964
+    },
+    {
+      "label": "chunk_k=512",
+      "iters": 55,
+      "median_ms": 38.918209075927734,
+      "tflops": 28.251855722109426,
+      "flop_clk_sm": 357.6999281115878,
+      "sample_finite": true,
+      "sample_relative_l2_error": 0.0008698029576448346,
+      "sm_clock_mhz": 1717.0,
+      "sm_clock_peak_mhz": 2137.0,
+      "power_w": 99.738,
+      "power_peak_w": 105.325,
+      "temperature_peak_c": 56.0,
+      "utilization_gpu_median_pct": 100.0,
+      "throttle_reasons_mask": 4,
+      "telemetry_samples": 41,
+      "telemetry_active_samples": 36,
+      "throttle_reasons": [
+        "software_power_cap"
+      ],
+      "chunk_k": 512,
+      "num_chunks": 16,
+      "speedup_vs_fp32acc": 0.6379089017782973,
+      "error_ratio_vs_fp32acc": 4.4433321835668895,
+      "error_reduction_vs_full_fp16acc": 3.729725395281486
+    },
+    {
+      "label": "chunk_k=1024",
+      "iters": 65,
+      "median_ms": 28.53116798400879,
+      "tflops": 38.537210547856176,
+      "flop_clk_sm": 469.33638470169507,
+      "sample_finite": true,
+      "sample_relative_l2_error": 0.0011421404478628228,
+      "sm_clock_mhz": 1785.0,
+      "sm_clock_peak_mhz": 2085.0,
+      "power_w": 100.306,
+      "power_peak_w": 101.178,
+      "temperature_peak_c": 58.0,
+      "utilization_gpu_median_pct": 100.0,
+      "throttle_reasons_mask": 4,
+      "telemetry_samples": 34,
+      "telemetry_active_samples": 29,
+      "throttle_reasons": [
+        "software_power_cap"
+      ],
+      "chunk_k": 1024,
+      "num_chunks": 8,
+      "speedup_vs_fp32acc": 0.8701456605182762,
+      "error_ratio_vs_fp32acc": 5.83455064798091,
+      "error_reduction_vs_full_fp16acc": 2.8403916401781464
+    },
+    {
+      "label": "chunk_k=2048",
+      "iters": 84,
+      "median_ms": 22.485456466674805,
+      "tflops": 48.898790620753545,
+      "flop_clk_sm": 590.565104115381,
+      "sample_finite": true,
+      "sample_relative_l2_error": 0.0016435633171427886,
+      "sm_clock_mhz": 1800.0,
+      "sm_clock_peak_mhz": 1957.0,
+      "power_w": 100.029,
+      "power_peak_w": 100.829,
+      "temperature_peak_c": 60.0,
+      "utilization_gpu_median_pct": 100.0,
+      "throttle_reasons_mask": 4,
+      "telemetry_samples": 37,
+      "telemetry_active_samples": 32,
+      "throttle_reasons": [
+        "software_power_cap"
+      ],
+      "chunk_k": 2048,
+      "num_chunks": 4,
+      "speedup_vs_fp32acc": 1.1041035367726553,
+      "error_ratio_vs_fp32acc": 8.396036962859453,
+      "error_reduction_vs_full_fp16acc": 1.9738370564625132
+    },
+    {
+      "label": "chunk_k=4096",
+      "iters": 99,
+      "median_ms": 19.540576934814453,
+      "tflops": 56.268125114415426,
+      "flop_clk_sm": 661.7366032907461,
+      "sample_finite": true,
+      "sample_relative_l2_error": 0.0021402810563383168,
+      "sm_clock_mhz": 1848.5,
+      "sm_clock_peak_mhz": 1897.0,
+      "power_w": 99.82,
+      "power_peak_w": 100.339,
+      "temperature_peak_c": 60.0,
+      "utilization_gpu_median_pct": 100.0,
+      "throttle_reasons_mask": 4,
+      "telemetry_samples": 37,
+      "telemetry_active_samples": 32,
+      "throttle_reasons": [
+        "software_power_cap"
+      ],
+      "chunk_k": 4096,
+      "num_chunks": 2,
+      "speedup_vs_fp32acc": 1.2704984143314375,
+      "error_ratio_vs_fp32acc": 10.933487424849362,
+      "error_reduction_vs_full_fp16acc": 1.5157477427609785
+    },
+    {
+      "label": "full_fp16acc(k=8192)",
+      "iters": 118,
+      "median_ms": 16.726384162902832,
+      "tflops": 65.73516529738617,
+      "flop_clk_sm": 854.680222818106,
+      "sample_finite": true,
+      "sample_relative_l2_error": 0.003244126180018886,
+      "sm_clock_mhz": 1672.0,
+      "sm_clock_peak_mhz": 1687.0,
+      "power_w": 99.765,
+      "power_peak_w": 100.131,
+      "temperature_peak_c": 60.0,
+      "utilization_gpu_median_pct": 100.0,
+      "throttle_reasons_mask": 4,
+      "telemetry_samples": 37,
+      "telemetry_active_samples": 32,
+      "throttle_reasons": [
+        "software_power_cap"
+      ],
+      "chunk_k": 8192,
+      "num_chunks": 1,
+      "speedup_vs_fp32acc": 1.484258149819672,
+      "error_ratio_vs_fp32acc": 16.572408884720964,
+      "error_reduction_vs_full_fp16acc": 1.0
+    }
+  ]
+}
