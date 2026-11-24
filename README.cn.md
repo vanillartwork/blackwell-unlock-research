@@ -6,7 +6,9 @@
 
 **你的英伟达显卡，有一半的张量算力在出厂时就被锁死了。** 同一张 RTX 5090，FP16 输入在 FP16 累加下的稠密峰值约为 419 TFLOP/s，改用 FP32 累加便只剩约 209.5 TFLOP/s。NVIDIA 在架构白皮书中列出了这组数字，但购买页面突出展示的是 AI TOPS，消费者很难从中判断自己常用的训练或推理路径会损失多少吞吐。在审阅的资料中，NVIDIA 没有充分说明这项限制的技术必要性。我的判断是，它主要服务于消费级与专业级产品的人为分档。让消费者承担这样的性能折损，却不在选购时清楚披露，在我看来是极不正当、也可耻的商业做法。[RTX 5090 产品规格](https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/) · [架构白皮书，附录 A](https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf)
 
-**[打开 Blackwell 交互算力图](https://vanillartwork.github.io/blackwell-unlock-research/#zh)**　在浏览器中切换计算精度，对比桌面显卡、笔记本、专业卡和数据中心型号。
+[![Blackwell 稠密张量算力对照图（BF16 / FP16）](docs/throughput-ceiling-zh.svg)](https://vanillartwork.github.io/blackwell-unlock-research/#zh)
+
+*Blackwell 稠密张量算力预览（BF16 / FP16 输入、FP32 累加、桌面卡）——**[打开可交互算力图](https://vanillartwork.github.io/blackwell-unlock-research/#zh)**，可在浏览器中切换 BF16 / FP16 / FP8 / TF32 / FP32 精度、对数刻度，并加入笔记本、RTX PRO、B200 与 DGX Spark 参照。*
 
 | 型号 | SM 数 | 参考 Boost | 出厂峰值 | 假设满速上限 |
 |---|---:|---:|---:|---:|
@@ -184,7 +186,10 @@ blackwell-unlock-research/
 ├── requirements.txt                 # 可选 Python 依赖（仅基准与算子脚本需要）
 ├── .github/workflows/ci.yml         # 无 GPU 环境的单元测试、shellcheck 与一致性检查
 ├── docs/
+│   ├── .nojekyll                    # 禁用 GitHub Pages 的 Jekyll 构建
 │   ├── index.html                   # 交互式 GPU 算力图（GitHub Pages）
+│   ├── throughput-ceiling.svg       # README 可点击算力预览图（英文）
+│   ├── throughput-ceiling-zh.svg    # README 可点击算力预览图（中文）
 │   ├── architecture-map.cn.md       # GB20x 启动链、权限与两条研究路线
 │   ├── abi-fields.cn.md             # 主机侧引导结构体字段表、HAL 绑定与跨驱动版本漂移（公开源码静态阅读）
 │   ├── abi-invariants.cn.md         # Host -> FMC (GSP_FMC_BOOT_PARAMS / GspFwWprMeta) 校验不变量清单

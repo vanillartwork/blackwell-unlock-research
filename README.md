@@ -6,7 +6,9 @@
 
 **Half of your NVIDIA GPU's tensor compute is locked out of the box.** On the same RTX 5090, dense FP16 inputs peak at about 419 TFLOP/s with FP16 accumulation and 209.5 TFLOP/s with FP32 accumulation. NVIDIA lists both figures in its architecture whitepaper. The sales page emphasizes AI TOPS, leaving buyers little basis for judging the cost in their own training or inference workloads. It is found no adequate technical justification for the limit in the materials reviewed. In my view, its primary purpose is to create an artificial performance gap between consumer and professional products. Imposing that cost without clearly disclosing it at the point of sale is indefensible and shameful. [RTX 5090 specifications](https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5090/) · [Architecture whitepaper, Appendix A](https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf)
 
-**[Open the interactive Blackwell throughput chart](https://vanillartwork.github.io/blackwell-unlock-research/#en)** to switch precision and compare desktop, laptop, workstation and data-center GPUs in your browser.
+[![Blackwell dense tensor throughput ceiling (BF16 / FP16)](docs/throughput-ceiling.svg)](https://vanillartwork.github.io/blackwell-unlock-research/#en)
+
+*Blackwell dense tensor throughput preview (BF16 / FP16, FP32 accumulation, desktop models) — **[open the interactive chart](https://vanillartwork.github.io/blackwell-unlock-research/#en)** to switch between BF16 / FP16 / FP8 / TF32 / FP32, toggle log scale, and compare desktop, laptop, RTX PRO, B200 and DGX Spark.*
 
 | GPU | SMs | Reference boost | Factory peak | Hypothetical full rate |
 |---|---:|---:|---:|---:|
@@ -184,7 +186,10 @@ blackwell-unlock-research/
 ├── requirements.txt                 # Optional benchmark dependencies
 ├── .github/workflows/ci.yml         # Tests, ShellCheck and consistency checks
 ├── docs/
+│   ├── .nojekyll                    # Disable Jekyll processing for GitHub Pages
 │   ├── index.html                   # Interactive GPU throughput chart (GitHub Pages)
+│   ├── throughput-ceiling.svg       # README clickable throughput chart preview (EN)
+│   ├── throughput-ceiling-zh.svg    # README clickable throughput chart preview (ZH)
 │   ├── architecture-map.md          # Boot stages, privileges and research routes
 │   ├── abi-fields.md                # Host fields, HAL bindings and version differences
 │   ├── abi-invariants.md            # Host-to-FMC baseline checks

@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="466" viewBox="0 0 780 466" role="img" aria-label="Blackwell dense tensor throughput ceiling (BF16 / FP16, FP32 accumulation)">
+<defs>
+  <pattern id="hatch-light" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+    <rect width="8" height="8" fill="#c4eed3"/>
+    <line x1="0" y1="0" x2="0" y2="8" stroke="#9bdab2" stroke-width="3"/>
+  </pattern>
+  <pattern id="hatch-dark" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+    <rect width="8" height="8" fill="#1d4b3c"/>
+    <line x1="0" y1="0" x2="0" y2="8" stroke="#2b6e56" stroke-width="3"/>
+  </pattern>
+</defs>
+<style>
+  text{font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace}
+  .card{fill:#ffffff;stroke:#c9d5d1;stroke-width:1}
+  .mast{fill:#102f35}
+  .mast-accent{fill:#8ad8ac}
+  .mast-title{fill:#f0f9f4;font-size:16px;font-weight:700}
+  .mast-sub{fill:#bfd1ce;font-size:11.5px}
+  .cta-bg{fill:#1b4950;stroke:#74918f;stroke-width:1}
+  .cta-txt{fill:#b0ecc4;font-size:11.5px;font-weight:600}
+  .fg{fill:#162b30}
+  .mut{fill:#485f62}
+  .row-line{stroke:#e2e9e5;stroke-width:1}
+  .grid{stroke:#e6eeea;stroke-width:1;stroke-dasharray:2,3}
+  .trk{fill:#f2f5f3}
+  .bar-fac{fill:#183c43}
+  .bar-ada{fill:#5a6f73}
+  .bar-ext{fill:url(#hatch-light);stroke:#51916b;stroke-width:1;stroke-dasharray:3,2}
+  @media (prefers-color-scheme:dark){
+    .card{fill:#0d1417;stroke:#24353b}
+    .mast{fill:#0b2227}
+    .fg{fill:#e6f1ee}
+    .mut{fill:#8fa6aa}
+    .row-line{stroke:#1c2b30}
+    .grid{stroke:#19272c}
+    .trk{fill:#162226}
+    .bar-fac{fill:#4899a6}
+    .bar-ada{fill:#6c8287}
+    .bar-ext{fill:url(#hatch-dark);stroke:#66c796}
+  }
+</style>
+<rect class="card" x="0.5" y="0.5" width="779" height="465" rx="8"/>
+<path class="mast" d="M8,1 H772 Q779,1 779,8 V64 H1 V8 Q1,1 8,1 Z"/>
+<rect class="mast-accent" x="1" y="64" width="778" height="3"/>
+<text class="mast-title" x="22" y="30">Blackwell Dense Tensor Throughput · BF16 / FP16</text>
+<text class="mast-sub" x="22" y="50">FP32 accumulation · desktop reference boost · excludes sparsity · dense TFLOP/s</text>
+<rect class="cta-bg" x="598" y="19" width="160" height="28" rx="5"/>
+<text class="cta-txt" x="678.0" y="37" text-anchor="middle">Open interactive chart ↗</text>
+<rect class="bar-fac" x="22" y="79" width="18" height="10" rx="2"/>
+<text class="fg" x="46" y="88" font-size="11.5">Factory peak (0.5× clamped)</text>
+<rect class="bar-ext" x="228" y="79" width="18" height="10" rx="2"/>
+<text class="fg" x="252" y="88" font-size="11.5">Hypothetical full-rate ceiling (2×)</text>
+<rect class="bar-ada" x="472" y="79" width="18" height="10" rx="2"/>
+<text class="mut" x="496" y="88" font-size="11.5">Ada reference (RTX 4090)</text>
+<text class="mut" x="22" y="114" font-size="11" font-weight="600">GPU</text>
+<text class="mut mono" x="254.0" y="114" font-size="10.5" text-anchor="start">0</text>
+<text class="mut mono" x="381.3" y="114" font-size="10.5" text-anchor="middle">150</text>
+<line class="grid" x1="381.3" y1="122" x2="381.3" y2="419"/>
+<text class="mut mono" x="508.7" y="114" font-size="10.5" text-anchor="middle">300</text>
+<line class="grid" x1="508.7" y1="122" x2="508.7" y2="419"/>
+<text class="mut mono" x="636.0" y="114" font-size="10.5" text-anchor="end">450</text>
+<line class="grid" x1="636.0" y1="122" x2="636.0" y2="419"/>
+<text class="mut" x="758" y="114" font-size="11" font-weight="600" text-anchor="end">Factory → Ceiling</text>
+<line class="row-line" x1="22" y1="122" x2="758" y2="122"/>
+<text class="fg" x="22" y="136.5" font-size="12.5" font-weight="650">RTX 5090</text>
+<text class="mut mono" x="22" y="149.5" font-size="9.5">GB202-300 · 170 SM · 2407 MHz</text>
+<rect class="trk" x="254" y="133" width="382" height="11" rx="2"/>
+<rect class="bar-ext" x="431.8" y="133" width="177.8" height="11" rx="1.5"/>
+<rect class="bar-fac" x="254" y="133" width="177.8" height="11" rx="2"/>
+<text class="mono" x="758" y="142.5" font-size="11.5" text-anchor="end"><tspan class="mut">209.5 → </tspan><tspan class="fg" font-weight="700">419.0</tspan></text>
+<line class="row-line" x1="22" y1="155" x2="758" y2="155"/>
+<text class="fg" x="22" y="169.5" font-size="12.5" font-weight="650">RTX 5090 D</text>
+<text class="mut mono" x="22" y="182.5" font-size="9.5">GB202-250 · 170 SM · 2407 MHz</text>
+<rect class="trk" x="254" y="166" width="382" height="11" rx="2"/>
+<rect class="bar-ext" x="431.8" y="166" width="177.8" height="11" rx="1.5"/>
+<rect class="bar-fac" x="254" y="166" width="177.8" height="11" rx="2"/>
+<text class="mono" x="758" y="175.5" font-size="11.5" text-anchor="end"><tspan class="mut">209.5 → </tspan><tspan class="fg" font-weight="700">419.0</tspan></text>
+<line class="row-line" x1="22" y1="188" x2="758" y2="188"/>
+<text class="fg" x="22" y="202.5" font-size="12.5" font-weight="650">RTX 4090</text>
+<text class="mut mono" x="22" y="215.5" font-size="9.5">AD102 · 128 SM · 2520 MHz</text>
+<rect class="trk" x="254" y="199" width="382" height="11" rx="2"/>
+<rect class="bar-ext" x="394.2" y="199" width="140.2" height="11" rx="1.5"/>
+<rect class="bar-ada" x="254" y="199" width="140.2" height="11" rx="2"/>
+<text class="mono" x="758" y="208.5" font-size="11.5" text-anchor="end"><tspan class="mut">165.2 → </tspan><tspan class="fg" font-weight="700">330.3</tspan></text>
+<line class="row-line" x1="22" y1="221" x2="758" y2="221"/>
+<text class="fg" x="22" y="235.5" font-size="12.5" font-weight="650">RTX 5080</text>
+<text class="mut mono" x="22" y="248.5" font-size="9.5">GB203-400 · 84 SM · 2617 MHz</text>
+<rect class="trk" x="254" y="232" width="382" height="11" rx="2"/>
+<rect class="bar-ext" x="349.5" y="232" width="95.5" height="11" rx="1.5"/>
+<rect class="bar-fac" x="254" y="232" width="95.5" height="11" rx="2"/>
+<text class="mono" x="758" y="241.5" font-size="11.5" text-anchor="end"><tspan class="mut">112.6 → </tspan><tspan class="fg" font-weight="700">225.1</tspan></text>
+<line class="row-line" x1="22" y1="254" x2="758" y2="254"/>
+<text class="fg" x="22" y="268.5" font-size="12.5" font-weight="650">RTX 5070 Ti</text>
+<text class="mut mono" x="22" y="281.5" font-size="9.5">GB203-300 · 70 SM · 2452 MHz</text>
+<rect class="trk" x="254" y="265" width="382" height="11" rx="2"/>
+<rect class="bar-ext" x="328.6" y="265" width="74.6" height="11" rx="1.5"/>
+<rect class="bar-fac" x="254" y="265" width="74.6" height="11" rx="2"/>
+<text class="mono" x="758" y="274.5" font-size="11.5" text-anchor="end"><tspan class="mut">87.9 → </tspan><tspan class="fg" font-weight="700">175.8</tspan></text>
+<line class="row-line" x1="22" y1="287" x2="758" y2="287"/>
+<text class="fg" x="22" y="301.5" font-size="12.5" font-weight="650">RTX 5070</text>
+<text class="mut mono" x="22" y="314.5" font-size="9.5">GB205-300 · 48 SM · 2512 MHz</text>
+<rect class="trk" x="254" y="298" width="382" height="11" rx="2"/>
+<rect class="bar-ext" x="306.4" y="298" width="52.4" height="11" rx="1.5"/>
+<rect class="bar-fac" x="254" y="298" width="52.4" height="11" rx="2"/>
+<text class="mono" x="758" y="307.5" font-size="11.5" text-anchor="end"><tspan class="mut">61.7 → </tspan><tspan class="fg" font-weight="700">123.5</tspan></text>
+<line class="row-line" x1="22" y1="320" x2="758" y2="320"/>
+<text class="fg" x="22" y="334.5" font-size="12.5" font-weight="650">RTX 5060 Ti</text>
+<text class="mut mono" x="22" y="347.5" font-size="9.5">GB206-300 · 36 SM · 2572 MHz</text>
+<rect class="trk" x="254" y="331" width="382" height="11" rx="2"/>
+<rect class="bar-ext" x="294.2" y="331" width="40.2" height="11" rx="1.5"/>
+<rect class="bar-fac" x="254" y="331" width="40.2" height="11" rx="2"/>
+<text class="mono" x="758" y="340.5" font-size="11.5" text-anchor="end"><tspan class="mut">47.4 → </tspan><tspan class="fg" font-weight="700">94.8</tspan></text>
+<line class="row-line" x1="22" y1="353" x2="758" y2="353"/>
+<text class="fg" x="22" y="367.5" font-size="12.5" font-weight="650">RTX 5060</text>
+<text class="mut mono" x="22" y="380.5" font-size="9.5">GB206-250 · 30 SM · 2497 MHz</text>
+<rect class="trk" x="254" y="364" width="382" height="11" rx="2"/>
+<rect class="bar-ext" x="286.6" y="364" width="32.6" height="11" rx="1.5"/>
+<rect class="bar-fac" x="254" y="364" width="32.6" height="11" rx="2"/>
+<text class="mono" x="758" y="373.5" font-size="11.5" text-anchor="end"><tspan class="mut">38.4 → </tspan><tspan class="fg" font-weight="700">76.7</tspan></text>
+<line class="row-line" x1="22" y1="386" x2="758" y2="386"/>
+<text class="fg" x="22" y="400.5" font-size="12.5" font-weight="650">RTX 5050</text>
+<text class="mut mono" x="22" y="413.5" font-size="9.5">GB207-300 · 20 SM · 2572 MHz</text>
+<rect class="trk" x="254" y="397" width="382" height="11" rx="2"/>
+<rect class="bar-ext" x="276.4" y="397" width="22.4" height="11" rx="1.5"/>
+<rect class="bar-fac" x="254" y="397" width="22.4" height="11" rx="2"/>
+<text class="mono" x="758" y="406.5" font-size="11.5" text-anchor="end"><tspan class="mut">26.3 → </tspan><tspan class="fg" font-weight="700">52.7</tspan></text>
+<line class="row-line" x1="22" y1="419" x2="758" y2="419"/>
+<text class="mut" x="22" y="445" font-size="11">Click to open interactive chart: switch BF16 / FP16 / FP8 / TF32 / FP32, add Laptop, RTX PRO, B200 &amp; Spark.</text>
+</svg>
