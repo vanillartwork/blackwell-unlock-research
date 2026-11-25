@@ -14,7 +14,7 @@
 | [NVIDIA/cutlass#3732](https://github.com/NVIDIA/cutlass/issues/3732) | BSD-3-Clause | SM120 FP8 `QMMA` 与单位缩放 `QMMA.SF`（`kind::mxf8f6f4`）对照 | 逐位一致与消费卡/PRO 6000 差异确认；本机 GB205 复现见第 5 节 |
 | [flashinfer-ai/flashinfer#5963](https://github.com/flashinfer-ai/flashinfer/issues/5963) | Apache-2.0 | RTX 5090 FP8 注意力 `QMMA` vs 单位缩放 `QMMA.SF` 实测 | GB202 跨卡印证 |
 | [steviecurrie/gpu-unlock-gb206](https://github.com/steviecurrie/gpu-unlock-gb206) | GPL-2.0 | GB206 基线、`FEAT_READOUT_1` 非连续解码与 Debug/Prod FMC 对照 | Debug/Prod FMC 已在 `615.71.10` 和 `620.73.04` 独立复核，见第 5 节 |
-| [shuttie/bf16-unlock-blackwell-research#2](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/2) | — | `gsp_ga10x.bin` 中 `PMU_RISCV_EB` 的离线静态/模拟分析 | 第三方基于 Windows `596.49` 的离线分析，非真机实测，见第 5 节 |
+| [shuttie/bf16-unlock-blackwell-research#2](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/2) · [#3](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/3) | — | `gsp_ga10x.bin` 内部路径及 AD102/GA102 `booter_load` 离线分析 | 第三方基于 `595.91.07` / `596.49` 的离线静态/模拟分析，非真机实测，见第 5 节 |
 
 ---
 
@@ -84,9 +84,22 @@
 
 ## 5. 补充核查记录（2026-11-25）
 
-- **Debug 与 Prod 签名 FMC 资产核验（`open-gpu-kernel-modules` `615.71.10` / `620.73.04`）。** 直接比对上游 `g_bindata_kgspGetBinArchiveGspRmFmcGfwDebugSigned_GB202.c` 与 `ProdSigned_GB202.c`：两个 tag 中 `UCODE_IMAGE`（287,304 B，香农熵 `7.9992 bits/byte`）和 `UCODE_HASH`（48 B）均**逐字节相同**（`615.71.10` 镜像 SHA-256 前缀 `5b74fefd42fc7b5f`；`620.73.04` 为 `55042efa5e02ded6`），而 `UCODE_SIG`（96 B）与 `UCODE_PKEY`（97 B，按 104 B 对齐存储）均不同。由于载荷全加密且只有单签名、无签名槽位表，Debug 版 FMC 既无法挖出明文 gadget，也不存在签名降级空间。
+- **跨五个 `open-gpu-kernel-modules` tag 的 Debug 与 Prod 签名 FMC 核验。** 直接比对上游 `g_bindata_kgspGetBinArchiveGspRmFmcGfwDebugSigned_GB202.c` 与 `ProdSigned_GB202.c`，`610` 与 `615` 之间存在明确的打包变化：
+
+  | 驱动 tag | `UCODE_IMAGE`（287,304 B） | `UCODE_HASH`（48 B） | `UCODE_SIG`（96 B） | `UCODE_PKEY`（97 B） |
+  |---|---|---|---|---|
+  | `595.71.05` | 不同（`42e8e595` vs `960ccfe7`） | 不同 | 不同 | 不同 |
+  | `595.91.07` | 不同（`42e8e595` vs `cb93e210`） | 不同 | 不同 | 不同 |
+  | `610.57.04` | 不同（`e5dc9028` vs `17a15ce8`） | 不同 | 不同 | 不同 |
+  | `615.71.10` | 逐字节相同（`5b74fefd`，熵 `7.9992`） | 相同 | 不同 | 不同 |
+  | `620.73.04` | 逐字节相同（`55042efa`，熵 `7.9992`） | 相同 | 不同 | 不同 |
+
+  两种情形下镜像均全加密、无明文前导、仅附单签名且无槽位表，Debug 版 FMC 既无法挖出明文 gadget，也不存在多签名降级面。
 - **FP8→FP32 的 `QMMA.SF` 与 CUDA 13.5 `cuBLASLt`（本机 GB205 真机复现）。** 在已归档的同一块 RTX 5070 Ti Laptop（`10de:2f18`，46 SM，驱动 `621.01`，`nvcc 13.5`，`-gencode arch=compute_120a,code=sm_120a`，`cuobjdump --dump-sass` 确认生成指令）上实测：
   - 传统 `QMMA`（`m16n8k32.f32.e4m3.e4m3.f32`）：`1020.0 FLOP/SM/clk`（`0.498×`，`128.31 TFLOP/s`）。
   - 块缩放 `QMMA.SF.16832.F32.E4M3.E4M3.E8`（`kind::mxf8f6f4.block_scale.scale_vec::1X`，寄存器常量单位 UE8M0 `0x7F7F7F7F`）：`1956.3 FLOP/SM/clk`（`0.955×`，`235.83 TFLOP/s`，时钟归一化提速 `1.918×`）；精度验证 `256² + 0.125² = 65536.015625`（`0x47800002`）精确无损。
   - 同卡同驱动 `N=8192` FP8 E4M3 → FP32 GEMM（BF16 输出）：CUDA 13.5 `cuBLASLt 131000` 在 `FAST_ACCUM=0` 下测得 `241.70 TFLOP/s`（`4.55 ms/iter`），`FAST_ACCUM=1` 为 `239.93 TFLOP/s`（`4.58 ms/iter`），较归档的 PyTorch `2.11.0+cu128`（CUDA 12.8）基线（`111.80 TFLOP/s`，`0.50×`）提升 `2.16×`。结果与 RTX 5080（[NVIDIA/cutlass#3732](https://github.com/NVIDIA/cutlass/issues/3732)）、RTX 5090（[flashinfer-ai/flashinfer#5963](https://github.com/flashinfer-ai/flashinfer/issues/5963)）及 RTX 5070 Laptop（[steviecurrie/gpu-unlock-gb206#1](https://github.com/steviecurrie/gpu-unlock-gb206/issues/1)）一致。传统 `HMMA`（FP16 / BF16 / TF32 → FP32）依然锁在 `0.5×`。
-- **`PMU_RISCV_EB` 权限边界（第三方离线分析）。** [shuttie/bf16-unlock-blackwell-research#2](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/2) 评论 `7081180530` 对 Windows `596.49` 的 `gsp_ga10x.bin`（GB206 ordinal 70）做了离线静态分析与 Unicorn 有界模拟，确认 `PMU_RISCV_EB`（`falconId=26`）带有 4,944 B `LSF_UCODE_DESC_WRAPPER`（`bLsEncrypted=1`，镜像熵 `7.9999 bits/byte`），属于 Light Secure（LS / PL2），不具备改写 `FEAT_OVR_PLM`（PL3）的权限。该条按第三方离线分析归档，不作为真机实测。
+- **GSP-RM 内部路径、LPWR、`PMU_RISCV_EB` 与 Ada `booter_load`（第三方离线分析）。** 以下条目来自 [shuttie/bf16-unlock-blackwell-research#2](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/2) 与 [#3](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/3)，均属离线静态反汇编或 Unicorn 有界模拟，不作为真机实测：
+  - **GSP-RM 写入链与 Control Handler 普查。** 在 `595.91.07`（GB202，#3）与 `596.49` / `595.71.05`（GB206，#2）中均追踪到 `engine-start → Graphics+0xa58 → Graphics+0x938` 写 `0x381c`/`0x3820`，说明 GSP-RM 在引擎初始化时确实尝试写入，但受 PL2 权限限制会被 `FEAT_OVR_PLM`（PL3-only）硬件丢弃。`595.91.07` 的 1,516 个非空 RM Control Handler 中成功反编译 1,363 个（153 个反编译失败），已反编译项无一调用 BAR0 端口助手；公有读取接口（`0x20801230` / `0x2080123c`）仅读内存缓存；全镜像扫描未见写 `0x823804` 的 RM 路径。
+  - **注册表开关、LPWR slot-1 与 `PMU_RISCV_EB`。** 在 `596.49` GB206 的 Unicorn 有界仿真中（#2）：合成输入下 `RMDisableFeatureDisablement`（`GPU+0x545a`）仅改变零值回退逻辑，不将非零缓存值 `1/2/3` 清零；`OBJPGCTRL` 的 LPWR slot-1 捕获仅对 Turing（ordinal `37..41`）开启，GB206（`70`）已禁用；`PMU_RISCV_EB`（`falconId=26`）携带 4,944 B `LSF_UCODE_DESC_WRAPPER`（`bLsEncrypted=1`，熵 `7.9999`），属 Light Secure（LS / PL2），无 PL3 写权限。
+  - **Ada `booter_load` 栈溢出机理。** 对公开 `595.91.07` AD102/GA102 debug `BooterLoadUcode` 的 Falcon 静态反汇编（#3 评论 `6863650651`）显示，签名加载器（`0x6456`/`0x6556`）缺失对 `sp+0x48` 处 `0x40` B 栈缓冲区的上界校验，在 `host_length ∈ (0x40, 0x60]` 时可越界改写 `sp+0x88` 栈帧而不触发 `sp+0xa8` 处的栈金丝雀。Blackwell 已完全移除 SEC2 `booter_load` 阶段。

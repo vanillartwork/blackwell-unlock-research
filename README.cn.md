@@ -31,11 +31,11 @@
 
 ### 为什么 20–40 系的解锁方法在 50 系上失效了？
 
-- **20–40 系的旧路径已堵死。** 在 Turing、Ampere 和 Ada 架构上，社区工具（如 `nv-uefi-unlocker`）之所以生效，是因为主机侧（PL0）在 UEFI 阶段或驱动早期仍能直接通过 BAR0 改写速率与特性覆盖寄存器。
-- **PL3 硬件权限墙。** 在已采样的 Blackwell（GB202、GB203M、GB205、GB206）消费卡上，`FEAT_OVR_PLM` 均读回 `0xfffffb8f`——**写权限仅开放给最高特权级 PL3（片内安全固件）**，前代常用的 SEC2 Booter 载体也已取消（`SEC2_PLM = 0x00000b0f`）。主机 CPU、UEFI 和操作系统驱动都运行在 PL0，直接向 BAR0 写寄存器会被硬件拦截。
+- **20–40 系的 SEC2 Booter 路径已消失。** 在 Ampere 和 Ada 架构上，社区解锁工具（如 `nv-uefi-unlocker`、`gpu-unlock-ada`）依赖泄露的测试密钥解密公开的 `SEC2/Falcon booter_load` 调试固件，并在 UEFI / 预驱动阶段利用其签名加载器的栈缓冲区越界拷贝获取高权限执行，从而清除 `FEAT_OVR_PLM` 并改写 `SS0/SS1`（[离线反汇编记录](docs/references.cn.md#5-补充核查记录2026-11-25)）。Blackwell 已彻底移除 `SEC2 booter_load` 阶段（`SEC2_PLM = 0x00000b0f`，开源驱动 HAL 落空回退桩），前代漏洞攻击面在 50 系上根本不存在。
+- **PL3 硬件权限墙。** 在已采样的 Blackwell（GB202、GB203M、GB205、GB206）消费卡上，`FEAT_OVR_PLM` 均读回 `0xfffffb8f`——**写权限仅开放给最高特权级 PL3（片内安全固件）**。主机 CPU、UEFI 与操作系统驱动运行在 PL0，GSP-RM 运行在 PL2，无论直接写 BAR0 还是从 PL2 写入 `SS0/SS1` 都会被硬件拦截。
 - **没有“抢跑”窗口。** Blackwell 的片上不可变 ROM 与 FSP → FMC 安全启动链会在主机驱动接管 GPU 之前完成初始化并锁死权限，不存在“赶在上锁前改写寄存器”的时间窗口。
 
-因此，沿用 20–40 系的 UEFI/BAR0 改写思路在 50 系上行不通。想在软件层突破这道墙，必须找到主机侧能直接触达 **PL3 执行环境**的交互面——这就是本仓库将**路线 1** 锁定在 **Host → FMC 引导 ABI** 的根本原因。[启动链与权限详情](docs/architecture-map.cn.md)
+因此，沿用 20–40 系的 UEFI / SEC2 Booter 思路在 50 系上行不通。想在软件层突破这道墙，必须找到主机侧能直接触达 **PL3 执行环境**的交互面——这就是本仓库将**路线 1** 锁定在 **Host → FMC 引导 ABI** 的根本原因。[启动链与权限详情](docs/architecture-map.cn.md)
 
 ## 一、两条主线
 
@@ -62,7 +62,7 @@
 ## 二、前期排雷与已归档工作
 
 - **VBIOS 静态分析。** 已比较五种芯片的十二份 ROM，含 RTX PRO 6000 和 RTX 5090 D。72 个 V6 描述符均为 80 字节，每个对象的长度都等于头部、行区和声明的存储长度之和，SHA-384 对象目录提供了独立的边界校验。在已比较的明文结构中未发现专业卡专属标记，28 字节尾部与载荷在样本中一一对应。现有结果没有给出通过改头或换表解除钳制的依据。尾部用途和运行时认证顺序仍未知。[V6 研究](docs/vbios-v6-descriptor.cn.md) · [样本与来源](reports/rom-survey-20261123/README.cn.md)
-- **Debug 签名 FMC 与 LS 协处理器排雷。** 直接核验上游 `615.71.10` 和 `620.73.04` 源码确认，`GspRmFmcGfwDebugSigned_GB202` 与 `ProdSigned_GB202` 的 287,304 B 加密 `UCODE_IMAGE`（熵 `7.9992 bits/byte`）和 48 B `UCODE_HASH` 逐字节完全一致，仅 `UCODE_SIG`（96 B）与 `UCODE_PKEY`（97 B）不同，不存在明文 gadget 或多签名槽位降级面。第三方离线静态/Unicorn 分析（[shuttie/bf16-unlock-blackwell-research#2](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/2)）也确认 `PMU_RISCV_EB` 处于全加密 LS/PL2，无法作为 PL3 绕过路径。[核查记录](docs/references.cn.md#5-补充核查记录2026-11-25)
+- **Debug 签名 FMC、GSP-RM 内部路径与 LS 协处理器排雷。** 直接核验上游 5 个驱动 tag 确认，`GspRmFmcGfwDebugSigned_GB202` 与 `ProdSigned_GB202` 在 `595.71.05`–`610.57.04` 中密文不同，在 `615.71.10`–`620.73.04` 中 287,304 B 加密 `UCODE_IMAGE`（熵 `7.9992 bits/byte`）和 `UCODE_HASH` 逐字节一致（仅 `UCODE_SIG` 与 `UCODE_PKEY` 不同），两种情形下均不存在明文 gadget 或多签名降级面。第三方离线静态/Unicorn 分析（[shuttie/bf16-unlock-blackwell-research#2](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/2)、[#3](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/3)）也进一步封死了 GSP-RM 内部写路径（受 PL2 阻断）、1,363/1,516 个已反编译 RM Control Handler（无 `0x823804` 写路径）、`RMDisableFeatureDisablement`（合成输入测试）、LPWR slot-1（GB206 禁用）以及 `PMU_RISCV_EB`（全加密 LS/PL2）。[核查记录](docs/references.cn.md#5-补充核查记录2026-11-25)
 - **GSP-RM 运行时 RPC。** GSP-RM 在 FMC 初始化后以 PL2 运行。RPC 日志可解释运行期的时钟、功耗和挂起恢复行为。已测权限掩码仅向 PL3 开放相关寄存器的写权限。[启动链与权限](docs/architecture-map.cn.md)
 - **跨卡只读基线。** 已归档多款消费卡及 RTX PRO 的寄存器读数。评估算力是否变化时，应在同卡、相同工作负载下对照吞吐、SM 时钟和累加模式，再用寄存器数据解释结果。[测试矩阵](docs/test-matrix.cn.md)
 
