@@ -33,6 +33,8 @@
 2. **熔丝读回与权限掩码**：`FUSE_FEAT_OVR_DIS (0x8203f0) = 0`、`FUSE_EN_SW_OVERRIDE (0x820040) = 0`，但 `FEAT_OVR_PLM (0x823804) = 0xfffffb8f`（读掩码 `0xf`，写掩码 `0x8`，**仅允许 PL3 写入**）。
 3. **非连续 `FEAT_READOUT_1` 解码与速率律变化**：9 个 3-bit 字段位于位移 `0, 3, 7, 10, 13, 16, 19, 22, 28`（bit 6 与 bits 27:25 为空位），原字 `0x00c36180` 对应 `0 0 3 0 3 3 0 3 0`。在 Blackwell 上 `fmla32 = 3` 实测约为 **0.5× 半速**（而非 Ada 枚举定义的 1/8），且 FP16→FP16 累加与 FP32 SIMT 不受该钳制影响。
 4. **旧 SEC2 载体消失**：公开内核模块中 `kgspGetBinArchiveBooterLoadUcode` 对 Blackwell 落入空回退桩；硬件上 `SEC2_PLM (0x8403c4) = 0x00000b0f`（全读、零写），GB205 与 GB206 实测完全一致。
+5. **Debug 签名 FMC 与 LS 协处理器均无 PL3 旁路**：直接核验上游 `615.71.10` 和 `620.73.04` 源码确认，`GspRmFmcGfwDebugSigned_GB202` 与 `ProdSigned_GB202` 的 287,304 B 加密 `UCODE_IMAGE`（熵 `7.9992 bits/byte`）及 48 B `UCODE_HASH` 逐字节完全一致，仅 `UCODE_SIG`（96 B）与 `UCODE_PKEY`（97 B）不同，不存在明文 gadget 或多签名槽位降级面。此外，第三方离线静态/Unicorn 分析（[shuttie/bf16-unlock-blackwell-research#2](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/2)，基于 Windows `596.49` `gsp_ga10x.bin`）也确认 `PMU_RISCV_EB`（`falconId=26`）属于全加密 Light Secure（LS / PL2），无法写 PL3 寄存器。
+6. **钳制挂在传统发射路径上（`QMMA.SF` 未受限）**：本机 GB205（`10de:2f18`，驱动 `621.01`，CUDA 13.5）指令级实测证实，传统 `QMMA`（`m16n8k32.f32.e4m3.e4m3.f32`）被锁在 `1020.0 FLOP/SM/clk`（`0.498×`），而 Blackwell 新增的块缩放 `QMMA.SF.16832.F32.E4M3.E4M3.E8`（`kind::mxf8f6f4` 配单位 UE8M0 缩放 `0x7F7F7F7F`）可跑到 `1956.3 FLOP/SM/clk`（`0.955×`），且 `256² + 0.125² = 65536.015625`（`0x47800002`）精确无损。这说明消费卡并未物理阉割 FP32 累加器，半速门控仅作用于传统 `HMMA` 与非缩放 `QMMA`；FP16 / BF16 / TF32 → FP32（`HMMA`）仍被锁在 `0.5×`。[核查详情](references.cn.md#5-补充核查记录2026-11-25)
 
 ---
 

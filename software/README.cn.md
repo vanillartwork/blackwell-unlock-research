@@ -69,3 +69,15 @@ python3 scripts/verify-baseline.py --clamp-json clamp-local.json --compare repor
 ```
 
 多卡主机上 `--device` 指 CUDA 序号；遥测依次按 PCI 总线号、UUID、唯一型号名匹配到同一张物理卡，不受 `CUDA_VISIBLE_DEVICES` 或 CUDA 默认的“最快优先”排序影响（PyTorch 2.7 没有 PCI 属性，走 UUID）。匹配方式记录在 JSON 的 `telemetry_match`；无法唯一匹配时时钟与功耗留空，不会借用另一张卡的读数。扫描中若没有单块（`chunk_k >= n`）的一档，`error_reduction_vs_full_fp16acc` 记为 `null`。
+
+---
+
+## 4. FP8→FP32 满速软件路径（`QMMA.SF` 与 CUDA 13.2+）
+
+针对 **FP8（E4M3）→ FP32** 场景，原装消费级 Blackwell 显卡无需牺牲精度即可拿回满速：
+
+- **原理。** 传统非缩放 `QMMA`（`m16n8k32.f32.e4m3.e4m3.f32`）被锁在 `0.50×`，但 Blackwell 新增的微缩放指令 `QMMA.SF.16832.F32.E4M3.E4M3.E8`（`mma.sync.aligned.kind::mxf8f6f4.block_scale.scale_vec::1X`，配合寄存器常量单位 UE8M0 缩放因子 `0x7F7F7F7F`）**未被限速**，且输出与普通 `QMMA` 逐位一致（已在 RTX 5080 [NVIDIA/cutlass#3732](https://github.com/NVIDIA/cutlass/issues/3732)、RTX 5090 [flashinfer-ai/flashinfer#5963](https://github.com/flashinfer-ai/flashinfer/issues/5963) 及 RTX 5070 Laptop [steviecurrie/gpu-unlock-gb206#1](https://github.com/steviecurrie/gpu-unlock-gb206/issues/1) 上跨卡印证）。
+- **本机 GB205 一手复现（RTX 5070 Ti Laptop，46 SM，驱动 `621.01`，CUDA 13.5）：**
+  - 指令级微基准（`sm_120a`，`cuobjdump` 已核对 SASS）：普通 `QMMA` 为 **`1020.0 FLOP/SM/clk`**（`0.498×`，`128.31 TFLOP/s`），单位缩放 `QMMA.SF` 达到 **`1956.3 FLOP/SM/clk`**（`0.955×`，`235.83 TFLOP/s`，时钟归一化提速 `1.918×`）；精度验证 `256² + 0.125² = 65536.015625`（`0x47800002`）精确无损。
+  - `N=8192` FP8→FP32 GEMM（CUDA 13.5 `cuBLASLt 131000`）：`FAST_ACCUM=0` 测得 **`241.70 TFLOP/s`**（`4.55 ms/iter`），`FAST_ACCUM=1` 为 **`239.93 TFLOP/s`**（`4.58 ms/iter`）——同卡同驱动下较归档的 PyTorch `2.11.0+cu128`（CUDA 12.8）基线（`111.80 TFLOP/s`，`0.50×`）直接提升 **`2.16×`**。
+- **落地建议与适用边界。** 跑 FP8→FP32 矩阵乘时，升级到 **CUDA 13.2+**（新版 `cuBLASLt` 会自动走 `QMMA.SF`）或在自定义 CUTLASS / CuTe / FlashInfer 内核中改发单位缩放 `QMMA.SF`，即可无损拿回满速。但 **`HMMA`（FP16 / BF16 / TF32 → FP32）没有对应的微缩放指令，依然锁在 `0.5×`**，仍需依赖上文的 K 维分块规约（或路线 1 的固件层研究）。

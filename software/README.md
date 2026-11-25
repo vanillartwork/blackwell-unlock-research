@@ -69,3 +69,15 @@ python3 scripts/verify-baseline.py --clamp-json clamp-local.json --compare repor
 ```
 
 `--device` is a CUDA ordinal. Telemetry matches the physical GPU by PCI bus ID, then UUID, then a unique model name. Ambiguous matches leave the telemetry fields empty. If the sweep has no single-chunk case (`chunk_k >= n`), `error_reduction_vs_full_fp16acc` is `null`.
+
+---
+
+## 4. Full-rate FP8→FP32 via `QMMA.SF` and CUDA 13.2+
+
+For **FP8 (E4M3) → FP32** workloads specifically, you do not need a precision trade-off on stock consumer Blackwell cards:
+
+- **Mechanism.** While legacy `QMMA` (`m16n8k32.f32.e4m3.e4m3.f32`) is clamped at `0.50×`, Blackwell's microscaling instruction `QMMA.SF.16832.F32.E4M3.E4M3.E8` (`mma.sync.aligned.kind::mxf8f6f4.block_scale.scale_vec::1X` with constant unit UE8M0 scale `0x7F7F7F7F`) is **not** clamped and produces bit-identical FP32 accumulators (corroborated across RTX 5080 in [NVIDIA/cutlass#3732](https://github.com/NVIDIA/cutlass/issues/3732), RTX 5090 in [flashinfer-ai/flashinfer#5963](https://github.com/flashinfer-ai/flashinfer/issues/5963), and RTX 5070 Laptop in [steviecurrie/gpu-unlock-gb206#1](https://github.com/steviecurrie/gpu-unlock-gb206/issues/1)).
+- **Local GB205 verification (RTX 5070 Ti Laptop, 46 SMs, driver `621.01`, CUDA 13.5):**
+  - Raw MMA microbenchmark (`sm_120a`, SASS verified with `cuobjdump`): plain `QMMA` measured **`1020.0 FLOP/SM/clk`** (`0.498×`, `128.31 TFLOP/s`) vs unit-scale `QMMA.SF` at **`1956.3 FLOP/SM/clk`** (`0.955×`, `235.83 TFLOP/s`, `1.918×` cycle-normalized speedup), with exact FP32 accumulation (`256² + 0.125² = 65536.015625`, `0x47800002`).
+  - `N=8192` FP8→FP32 GEMM (`cuBLASLt 131000`, CUDA 13.5): **`241.70 TFLOP/s`** (`FAST_ACCUM=0`, `4.55 ms/iter`) and **`239.93 TFLOP/s`** (`FAST_ACCUM=1`, `4.58 ms/iter`), up **`2.16×`** over the archived PyTorch `2.11.0+cu128` (CUDA 12.8) baseline (`111.80 TFLOP/s`, `0.50×`) on the exact same GPU and driver.
+- **Practical takeaway and boundary.** For FP8→FP32 GEMMs, upgrading to **CUDA 13.2+** (`cuBLASLt` automatically dispatches `QMMA.SF`) or switching custom CUTLASS / CuTe / FlashInfer kernels to unit-scale `QMMA.SF` recovers full rate without losing FP32 accumulation precision. However, **`HMMA` (FP16 / BF16 / TF32 → FP32) has no microscaling equivalent and remains clamped at `0.5×`**, so FP16/BF16 workloads still rely on the K-chunked operator above (or Route 1 firmware research).
