@@ -2,7 +2,7 @@
 
 # Route 2 Deep Dive · SM 12.0 MMA Throttle-Gate Model, TMA-WS GEMM & End-to-End LLM Verification
 
-All hardware measurements in this note were collected on a single consumer Blackwell GPU (**RTX 5070 Ti Laptop GPU**, `GB205`, `10de:2f18`, 46 SMs, 140 W board TDP, driver `621.01`, CUDA `13.5`, `sm_120a`), with SASS verified via `cuobjdump --dump-sass` / `nvdisasm -b SM120`. Cross-card confirmation on desktop RTX 5080 and an unthrottled RTX PRO 6000 control remains open (§4).
+All hardware measurements in this note were collected on a single consumer Blackwell GPU (**RTX 5070 Ti Laptop GPU**, `GB205`, `10de:2f18`, 46 SMs, 140 W board TDP, driver `621.01`, CUDA `13.5`, `sm_120a`), with SASS verified via `cuobjdump --dump-sass` / `nvdisasm -b SM120`. Cross-card confirmation on desktop RTX 5080 and an unthrottled RTX PRO 6000 control remains open (§5).
 
 ---
 
@@ -187,16 +187,90 @@ Measured via in-kernel `atomicMax` on every `HMMA.F16` partial sum before flush:
 
 ---
 
-## 4. Engineering Selection Table & Open Verification Items
+## 4. Single-Sided Dual `QMMA.SF` (`W8A16` / `W4A16` / `FP8-KV`) & Exact INT8-Block Negative Verdict
+
+When weights are already quantized to FP8 (`MXFP8`) or FP4 (`MXFP4`)—or attention keys sit in an FP8 KV cache—while activations / queries stay in BF16, each 32-element `K`-block of BF16 activations can be split as $X = s(H + L/16)$ (power-of-2 `UE8M0` scale $s$ mapping block peak into $[128, 256)$, nearest `E4M3FN` $H$, and `16×`-amplified `E4M3FN` rounding residual $L$). Two full-rate `QMMA.SF.16832` instructions accumulate $H \cdot W$ (scale $s$) and $L \cdot W$ (scale $s/16 \Rightarrow \text{scale}_L = \text{scale}_H - 4$) directly into the **same FP32 accumulator**, reusing the weight registers with zero second accumulator and zero epilogue merge. Full raw records are archived in [reports/gb205-2f18/route2-dual-qmma-621.01.json](../reports/gb205-2f18/route2-dual-qmma-621.01.json), the SM 12.0 CUDA kernel/benchmark is in [software/dual_qmma_tma_ws.cu](../software/dual_qmma_tma_ws.cu), and CPU-only verification runs via `python3 software/verify_dual_fp8.py`.
+
+### 4.1 `QMMA.SF.16832` hardware probes: zero FTZ, 23-bit RZ accumulator & shared-acc throughput
+
+- **Zero FTZ on E4M3 subnormals (`16,384×` exact dynamic range):** Probing all 14 non-zero `E4M3` subnormals across two `UE8M0` scales (`0x7F`/`0x83`) yields **`28 / 28` bit-exact (`FTZ = NO`)** on both `E4M3 × E4M3` and `E4M3 × E2M1`. Because hardware preserves subnormals, the provably lossless BF16 range widens `8×` beyond normal-only $[1/8, 256)$ (`2,048×`) down to **`[2⁻⁶, 256)` (`16,384×`, 14 consecutive binary exponents)**.
+- **`E2M1` register packing & `scale_vec::1X` lane mapping:** In `kind::mxf8f6f4` (`m16n8k32.e4m3.e2m1`), each 4-bit `E2M1` weight occupies **bits `[5:2]`** of an 8-bit lane (`nib << 2`, verified **`64 / 64` bit-exact** across all 16 codes × 4 byte lanes). Offline interleaved `(k, k+16)` 4-bit packing unpacks directly to `b0, b1` with two shift-mask ops (halving weight GMEM/SMEM traffic and `ldmatrix` calls vs. FP8). For `scale_vec::1X {0,0}`, `A` scales come from `t ∈ {0,1}` byte 0 (row `group + 8·t`) and `B` scales from `t = 0` byte 0 (col `group`).
+- **Full 23-bit mantissa, RZ rounding & `RN16` synergy:** `QMMA.SF.16832` retains a **full 23-bit IEEE FP32 mantissa** (`1.0 + 2⁻²³ → 0x3f800001`, unlike Hopper's FP22 WGMMA) with **RZ (round-toward-zero)** truncation (`1.0 + 1.5·2⁻²⁴ → +0 ulp`, `1.0 + 1.75·2⁻²⁴ → +0 ulp`), identical to `HMMA.F32`. Exhaustively testing all `3,584` BF16 values in `[2⁻⁶, 256)` confirms **`3,584 / 3,584` bit-exactness** (`max_rel = 0.000e+00`) for both `W8A16` and `W4A16`. On `K = 4,096` zero-mean `N(0,1)` block dot products, Dual-FP8 cuts relative error from `9.97e-3` (W8) / `6.41e-1` (W4) down to `7.12e-7` / `3.02e-6`; on biased `K = 65,536` `N(0.25,1)`, adding a periodic `RN16` flush every 16 K-blocks suppresses RZ drift from `4.34e-5` / `1.03e-5` down to **`3.16e-8` / `3.88e-8`**.
+- **Shared-accumulator instruction throughput:** At `16 warps/SM`, back-to-back `H` then `L` into the same `c[k]` (`4T`) sustains `1941.7` raw = `970.8` eff FLOP/SM/clk—identical to staggered `H[0..3] → L[0..3]` (**zero RAW stall**). Scaling to `8T` reaches **`1993.5` raw → `996.7` eff FLOP/SM/clk (`1.947×` of native 512)** on both `W8A16` and `W4A16`.
+
+### 4.2 `TMA-WS 128×256×64` Dual `QMMA.SF` steady-state NVML benchmark (GB205, 140 W)
+
+[software/dual_qmma_tma_ws.cu](../software/dual_qmma_tma_ws.cu) benchmarks three deployment variants: **Pre-split** (`(H, L, sH)` at `2.03 B/elem ≈ BF16 2.00 B/elem` emitted by a fused `RMSNorm`/`SwiGLU` prologue or reused across `q/k/v` and `gate/up`), **2-kernel** (standalone `uint4` split kernel at `393–585 GB/s` + pre-split GEMM, total wall time including split), and **Online** (single kernel reading raw BF16 via TMA while 4 producer warps split asynchronously behind hardware-sleeping `mbarrier.try_wait(..., 0x989680)`). Steady-state NVML (`1.0 s` pre-burn + `1.0 s` timed), compared against **true FP64** using the same dequantized weights:
+
+| Shape (`M×N×K`) | Kernel | Wall `TF/s` | `FLOP/SM/clk` | SM Clock / Power | `rel_L2` vs. True FP64 | vs. `cuBLAS BF16` (wall / per-GHz) |
+|---|---|---:|---:|---:|---:|---:|
+| `4096×14336×4096` (Up) | `cuBLAS BF16→FP32` (W8 dequant) | `62.60` | `503.7` | `2.70 GHz` / `132.4 W` | `1.47e-06` | `1.00× / 1.00×` |
+| `4096×14336×4096` (Up) | `cuBLAS FP16→FP16` (1024 ceiling) | `103.65` | `988.7` | `2.28 GHz` / `139.4 W` | — | `1.66× / 1.96×` |
+| `4096×14336×4096` (Up) | `TMA-WS Single-FP8 W8A8` | `162.16` | `1725.3` | `2.04 GHz` / `139.5 W` | `2.65e-02` | `2.59× / 3.43×` |
+| `4096×14336×4096` (Up) | **`TMA-WS Dual-FP8 W8A16` (pre-split)** | **`96.06`** | **`980.8`** | `2.13 GHz` / `139.6 W` | **`1.38e-06`** | **`1.53× / 1.95×`** |
+| `4096×14336×4096` (Up) | **`TMA-WS Dual-FP8 W8A16` (2-kernel)** | **`92.74`** | **`951.1`** | `2.12 GHz` / `139.5 W` | **`1.38e-06`** | **`1.48× / 1.89×`** |
+| `4096×14336×4096` (Up) | `TMA-WS Dual-FP8 W8A16` (online) | `85.76` | `893.4` | `2.09 GHz` / `139.7 W` | `1.38e-06` | `1.37× / 1.77×` |
+| `4096×14336×4096` (Up) | **`TMA-WS Dual-FP8 W4A16` (pre-split)** | **`98.86`** | **`968.6`** | `2.22 GHz` / `139.5 W` | **`1.67e-07`** | **`1.58× / 1.92×`** |
+| `4096×14336×4096` (Up) | **`TMA-WS Dual-FP8 W4A16` (2-kernel)** | **`96.86`** | **`941.3`** | `2.24 GHz` / `139.7 W` | **`1.67e-07`** | **`1.55× / 1.87×`** |
+| `4096×14336×4096` (Up) | `TMA-WS Dual-FP8 W4A16` (online) | `88.67` | `892.1` | `2.16 GHz` / `139.7 W` | `1.67e-07` | `1.42× / 1.77×` |
+| `4096×4096×4096` (Q/O) | `cuBLAS BF16→FP32` | `55.35` | `484.7` | `2.48 GHz` / `139.9 W` | `1.53e-06` | `1.00× / 1.00×` |
+| `4096×4096×4096` (Q/O) | **`Dual-FP8 W8A16` (pre / 2k / online)** | **`90.68` / `85.13` / `82.20`** | **`907.5` / `843.9` / `836.8`** | `2.14–2.19 GHz` | **`1.39e-06`** | **`1.64×–1.48×` / `1.87×–1.73×`** |
+| `4096×4096×4096` (Q/O) | **`Dual-FP8 W4A16` (pre / 2k / online)** | **`94.97` / `87.82` / `84.70`** | **`904.3` / `828.3` / `829.9`** | `2.22–2.31 GHz` | **`1.55e-07`** | **`1.72×–1.53×` / `1.87×–1.71×`** |
+| `512×14336×4096` (B512) | `cuBLAS BF16→FP32` / `FP16→FP16` | `52.66` / `91.91` | `509.0` / `937.5` | `2.25` / `2.13 GHz` | `1.63e-06` / — | `1.00×` / `1.75×` |
+| `512×14336×4096` (B512) | **`Dual-FP8 W8A16` (pre / 2k / online)** | **`91.45` / `88.93` / `82.26`** | **`957.1` / `914.6` / `860.8`** | `2.08–2.11 GHz` | **`1.53e-06`** | **`1.74×–1.56×` / `1.88×–1.69×`** |
+| `512×14336×4096` (B512) | **`Dual-FP8 W4A16` (pre / 2k / online)** | **`94.53` / `91.71` / `85.87`** | **`923.4` / `885.8` / `844.1`** | `2.21–2.25 GHz` | **`1.78e-07`** | **`1.79×–1.63×` / `1.81×–1.66×`** |
+
+Key takeaways: (1) `Pre-split` hits `980.8 FLOP/SM/clk` (`99.2%` of `cuBLAS FP16→FP16`) on `4096×14336×4096`, and `W4A16` (`94.53 TF/s`) even edges out `cuBLAS FP16→FP16` (`91.91 TF/s`) at `Batch-512`; (2) true-FP64 `rel_L2` across all Dual-FP8 variants (`W8A16: 1.38e-6–1.53e-6`, `W4A16: 1.55e-7–1.78e-7`) is **lower than native `cuBLAS BF16→FP32`** (`1.47e-6–1.63e-6`); (3) `2-kernel` splits `A` once at `0.016–0.172 ms` and beats `online` by `6%–9%` (since `online` repeats the split across every CTA along `N`), while `online` still delivers `1.66×–1.77×` per-GHz speedup with zero workspace allocation.
+
+### 4.3 Real-model 517M-block distribution census & exact INT8-affine negative verdict
+
+Scanning all linear weights and 16,384 WikiText-2-raw activation tokens across `Llama-3.2-1B` and `Qwen2.5-1.5B` (**`517,031,936` 32-element BF16 blocks / `16.55 billion` elements**), with exact Python `Fraction` dyadic GCD verification for 256-level uniform grids:
+
+| Model & Tensor | 32-elem Blocks | `nz ∈ [1/8,256)` | `nz ∈ [2⁻⁶,256)` | **Dual-FP8 Exact Bit-Match** | `rel_L2` (Single → Dual FP8) | `B2` (`≤16×` DR) | **Exact Lossless INT8 Affine** |
+|---|---:|---:|---:|---:|---|---:|---:|
+| `Llama-3.2-1B` weights | `38,617,088` | `99.861%` | **`99.983%`** | **`99.9885%`** | `2.659e-2` → **`8.185e-9`** (`3.25M×`) | `2.0658%` | **`0` (`0.000000%`)** |
+| `Llama-3.2-1B` activations | `168,820,736` | `99.497%` | **`99.917%`** | **`99.9409%`** | `2.677e-2` → **`2.274e-7`** (`118k×`) | `0.6669%` | **`0` (`0.000000%`)** |
+| `Qwen2.5-1.5B` weights | `48,236,544` | `99.857%` | **`99.983%`** | **`99.9974%`** | `2.664e-2` → **`4.984e-9`** (`5.34M×`) | `1.9818%` | **`0` (`0.000000%`)** |
+| `Qwen2.5-1.5B` activations | `261,357,568` | `99.432%` | **`99.916%`** | **`99.9427%`** | `2.668e-2` → **`6.017e-7`** (`44.3k×`) | `0.4824%` | **`0` (`0.000000%`)** |
+
+Two sharp empirical verdicts: (1) exploiting E4M3 subnormals lifts real-LLM Dual-FP8 exact bit-identity to **`99.94%`** on activations (`rel_L2 = 2.3e-7–6.0e-7`) and **`99.99%+`** on weights (`5e-9–8e-9`); (2) **exact lossless INT8 affine block detection passes `0 / 517,031,936` (`0.000000%`)** on continuous BF16 LLM tensors (`100.00%` of blocks are mixed-sign; while `3.91M` blocks clear the necessary `span ≤ 255·min_diff` screen, zero survive exact dyadic GCD). That closes online lossless BF16→INT8 block dispatch for generic BF16 LLMs (it applies only to tensors already pre-quantized onto a `≤8-bit` uniform grid, where no online check is needed).
+
+### 4.4 End-to-end 32k WikiText-2-raw LLM KL evaluation (`W8A16` / `W4A16` / `FP8-KV QKᵀ`)
+
+Across 32 chunks (`32,768` tokens) on both models—quantizing all Transformer-block linear layers to block-32 `MXFP8` / `MXFP4` (`lm_head` kept BF16) and separately quantizing attention `K` along `head_dim` to block-32 `MXFP8` (`V` and linears untouched)—exact FP64 `log_softmax` KL comparisons (4,000-resample paired bootstrap, `seed=2026`, verifiable via `software/verify_dual_fp8.py`):
+
+| Model & Regime (32,768 tokens) | Activation / `Q` | `PPL` | KL vs. Same-Weight `BF16` Ref | Top-1 Match | KL vs. Orig Unquantized BF16 | Single / Dual KL Ratio `[95% CI]` |
+|---|---|---:|---:|---:|---:|---:|
+| `Llama-3.2-1B` **`W8_MXFP8`** (orig `11.1352`) | `BF16` / `Single` / **`Dual`** | `11.2261` / `11.3068` / **`11.2246`** | `0` / `7.403e-3` / **`8.298e-4`** | `95.23%` → **`98.42%`** | `7.280e-3` / `1.390e-2` / **`7.281e-3`** | **`8.9×`** `[8.6×, 9.3×]` |
+| `Llama-3.2-1B` **`W4_MXFP4`** | `BF16` / `Single` / **`Dual`** | `13.5875` / `13.7167` / **`13.5892`** | `0` / `9.932e-3` / **`9.504e-4`** | `94.77%` → **`98.44%`** | `2.027e-1` / `2.113e-1` / **`2.028e-1`** | **`10.5×`** `[10.0×, 10.9×]` |
+| `Llama-3.2-1B` **`FP8-KV QKᵀ`** (`k_max=13.7`) | `BF16` / `Single` / **`Dual`** | `11.1827` / `11.2627` / **`11.1784`** | `0` / `1.256e-2` / **`3.276e-3`** | `94.02%` → **`96.86%`** | `5.355e-3` / `1.206e-2` / **`5.313e-3`** | **`3.8×`** `[3.7×, 4.0×]` |
+| `Qwen2.5-1.5B` **`W8_MXFP8`** (orig `9.9583`) | `BF16` / `Single` / **`Dual`** | `9.9902` / `10.0435` / **`9.9889`** | `0` / `8.996e-3` / **`9.598e-4`** | `94.94%` → **`98.33%`** | `7.444e-3` / `1.538e-2` / **`7.481e-3`** | **`9.4×`** `[8.9×, 9.9×]` |
+| `Qwen2.5-1.5B` **`W4_MXFP4`** | `BF16` / `Single` / **`Dual`** | `11.1879` / `11.2609` / **`11.1893`** | `0` / `9.112e-3` / **`1.011e-3`** | `94.95%` → **`98.30%`** | `1.446e-1` / `1.514e-1` / **`1.447e-1`** | **`9.0×`** `[8.7×, 9.3×]` |
+| `Qwen2.5-1.5B` **`FP8-KV QKᵀ`** (`k_max=322` unsmoothed) | `BF16` / `Single` / **`Dual`** | `29.7135` / `30.0997` / **`29.7081`** | `0` / `7.258e-2` / **`1.118e-2`** | `86.26%` → **`93.54%`** | `1.144` / `1.161` / **`1.143`** | **`6.5×`** `[5.4×, 7.4×]` |
+
+Key observations:
+1. **Zero end-to-end quality degradation:** Across all six settings, `Dual-FP8` matches exact `BF16` activations to 3–4 significant digits on both `PPL` and `KL_vs_orig` (e.g., `Llama W8`: `7.281e-3` vs. `7.280e-3`; `Llama FP8-KV`: `5.313e-3` vs. `5.355e-3`), completely removing `Single-FP8`'s `1.91×–2.25×` excess KL and `+0.05–0.13` PPL drop.
+2. **Floor attribution:** On linear layers, `Dual-FP8`'s `8.30e-4` / `9.60e-4` KL vs. same-weight `BF16` sits squarely on §3.3's **inter-layer BF16 discrete-rounding floor** (`8.42e-4` / `9.91e-4`). On `FP8-KV`, a tiny rounding delta in layer 0 pushes dynamically re-quantized downstream `K` activations across coarse 4-bit E4M3 boundaries: a direct **`10⁻⁷` relative perturbation control (`q × (1 + 10⁻⁷)`)** on chunk 0 produces `3.111e-3` (`Llama`, vs. `Dual-FP8` `2.919e-3`) and `1.048e-2` (`Qwen`, vs. `Dual-FP8` `1.090e-2`), confirming the residual KL is the discrete floor rather than Dual-FP8 error. Note also that `Qwen2.5-1.5B`'s strong `k_proj` bias outliers (`k_max = 322` in layer 0) require per-channel K smoothing before FP8 KV quantization (naive block-32 K alone raises PPL from `9.96` to `29.71`).
+
+---
+
+## 5. Engineering Selection Table, External Blackwell Context & Open Items
 
 | Workload / Scenario | Recommended Path | Empirical Basis |
 |---|---|---|
-| Near-Gaussian inputs, `BF16` output (or standard `BF16`/`FP16` inference layers) | **Pure `B1` (`N=3`, TMA-WS)** | Fastest (`782–841 FLOP/SM/clk` on exact `K=4096`, `1.61–1.66×` per-GHz vs. `cuBLAS BF16`; `790–849` / `1.63–1.69×` on 48-aligned `K=4080`); single-GEMM `rel_L2 ≈ 2.94e-4`; indistinguishable from `cuBLAS BF16→FP32` in BF16 deploy and `+1.35e-6` excess KL (`+10%`) in FP16 deploy |
-| Heavy-tailed / outlier-channel layers (e.g., `down_proj` with `max\|X\| > 10³`) | **`C1 + B1 (N=2)` + `K`-dim perm (`rms(X)` calib)** | `+6.4%–6.5%` time per clock vs. Pure `B1`; cuts single-GEMM FP32-output `rel_L2` by **~6×** (`4.9e-5`) and peak FP16 partial sums by **20×–137×**; on end-to-end FP16 LLMs cuts excess KL **2.7×–2.9×** (`+6.5e-7` Deploy / `+4.6e-7` High-Res) while largely masked under BF16 inter-layer floors |
-| Large `K` with non-zero activation mean (e.g., weight-gradient GEMMs) | **`HMMA.F32` + RN flush every 16 `k16` steps (`RN16`)** | Same throughput as native `HMMA.F32`; **19×–84×** lower error than `cublasGemmEx` (`19×` at `128×128×262k` with split-K; `84×` at `1024×1024×65k` without split-K) |
+| **FP8 / MXFP4 weights + BF16 activations (`W8A16` / `W4A16`) or FP8-KV `QKᵀ`** | **Single-sided Dual `QMMA.SF` (`X = s(H+L/16)`, shared FP32 acc)** | **`96.1–98.9 TF/s`** pre-split (`4096×14336×4096`, **`1.92×–1.95×`** per-GHz / `1.53×–1.58×` wall), **`92.7–96.9 TF/s`** 2-kernel (`1.87×–1.89×` per-GHz), **`85.8–88.7 TF/s`** online (`1.77×`); true-FP64 `rel_L2 = 1.67e-7–1.38e-6` (**better than `cuBLAS BF16`**); matches exact BF16 LLM quality on 32k tokens (**`8.9×–10.5×`** lower activation KL than Single-FP8) |
+| Pure FP16 / BF16 weights & activations, near-Gaussian inference | **Pure `B1` (`N=3`, TMA-WS)** | `782–841 FLOP/SM/clk` on exact `K=4096` (`1.61–1.66×` per-GHz vs. `cuBLAS BF16`; `790–849` / `1.63–1.69×` on `K=4080`); single-GEMM `rel_L2 ≈ 2.94e-4`; indistinguishable from `cuBLAS BF16→FP32` in BF16 deploy and `+1.35e-6` excess KL in FP16 deploy |
+| Pure FP16 / BF16 heavy-tailed / outlier layers (e.g., `down_proj` with `max\|X\| > 10³`) | **`C1 + B1 (N=2)` + `K`-dim perm (`rms(X)` calib)** | `+6.4%–6.5%` time per clock vs. Pure `B1`; cuts single-GEMM FP32-output `rel_L2` **~6×** (`4.9e-5`), peak FP16 partial sums **20×–137×**, and FP16 LLM excess KL **2.7×–2.9×** (`+6.5e-7` Deploy / `+4.6e-7` High-Res) |
+| Large `K` with non-zero activation mean (e.g., weight-gradient GEMMs) | **`HMMA.F32` / Dual `QMMA.SF` + `RN16` flush** | Same throughput as native; **19×–84×** lower error than `cublasGemmEx`; collapses biased `K=65,536` Dual `QMMA.SF` RZ drift from `4.34e-5` to **`3.16e-8`** |
 | `lm_head`, MoE routers, and other FP32-sensitive projections | **Keep native `HMMA.F32` (or `RN16`)** | `< 1.0%` wall time in last-token inference prefill (`0.73%–1.02%` on 1B–1.5B); in full-sequence training/eval (`6.7%–9.5%` wall / `15%–21%` MACs), weigh against the `+2.9e-7` to `+9.7e-7` KL penalty of replacing `lm_head` |
 | FP8 / mixed FP8×FP6 / FP8×FP4 / pure FP6 | **`QMMA.SF` unit scale (`0x7F`)** (upcast pure `FP6 → E4M3`) | Full **`2048 FLOP/SM/clk`** (`2.00×`), **`0` bit differences** |
 
+### External Blackwell software workarounds (third-party RTX 5090 reports, distinct from our GB205 measurements)
+
+- **FP4 microscaling attention ([SageAttention3](https://arxiv.org/abs/2505.11594)):** Targets unthrottled `OMMA.SF` NVFP4 on Blackwell, reporting up to `~1038 TOPS` (`~5×` over FlashAttention) on RTX 5090 for long-sequence video/image diffusion attention; our Dual-FP8 `QKᵀ` complements it for FP8 KV-cache LLM attention requiring BF16-grade `Q` fidelity.
+- **NVFP4 + fused low-rank outlier branch ([SVDQuant / Nunchaku](https://arxiv.org/abs/2411.05007)):** Absorbs activation/weight outliers via SVD into a fused low-rank branch around a 4-bit backbone, reporting `~3.1×` over W4A16 on RTX 5090; complements our calibration-free `Dual-FP8 W4A16` (`1.87×–1.92×` per-GHz directly on standard MXFP4 weights).
+- **INT8 Tensor Core emulation ([GEMMul8 / Ozaki-II](https://github.com/RIKEN-RCCS/GEMMul8)):** Uses unthrottled `IMMA.16832.S8.S8` (`2031.8 OP/SM/clk` on our GB205) with modular/CRT slicing to emulate FP64/FP32 scientific GEMMs; conversely, direct exact lossless BF16→INT8 block dispatch fails on `0 / 517M` continuous LLM blocks (§4.3).
+
 ### Pending / Out-of-Scope Verification Items
-- **Cross-GPU confirmation:** Re-running the TMA-WS NVML clock/power split on a higher-TDP desktop **RTX 5080** (`~4.3 W/SM`) and on an unthrottled **RTX PRO 6000** (negative control where `HMMA.F32` has no 32-cycle gate).
+- **Cross-GPU confirmation:** Re-running the TMA-WS NVML clock/power split (`Pure B1`/`C1+B1` and Dual `QMMA.SF`) on a higher-TDP desktop **RTX 5080** (`~4.3 W/SM`) and on an unthrottled **RTX PRO 6000** (negative control where `HMMA.F32` has no 32-cycle gate).
 - **Deep 7B layers:** `Qwen2.5-7B` partial-sum headroom above covers early layers `L0–L5` (shard 1) only; layers `L6–L27` remain unmeasured.

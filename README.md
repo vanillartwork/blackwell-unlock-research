@@ -67,7 +67,8 @@ All measurements below were collected on the same **GB205 (RTX 5070 Ti Laptop, d
 | :--- | :--- | :--- | :--- |
 | **FP8 / FP6 / Mixed FP8** | Unit-scale `QMMA.SF` / lossless `FP6 → E4M3` | **~2045–2048 FLOP/SM/clk** (**2.00×**, full rate) | **Bit-exact** (`0` bit diffs) |
 | **FP4 / 2:4 Sparse FP8** | `OMMA.SF` (`mxf4`/`mxf4nvf4`) / `QMMA.SF.SP` | **4087.7** / **4026.4 FLOP/SM/clk** (full rate) | No extra format loss (bit-exact on sparse FP8) |
-| **FP16 / BF16 → FP32** | SM 12.0 TMA-WS `Pure B1` / `C1+B1` | **1.66× / 1.56× per-GHz** (`K=4096`, 1.31× / 1.25× wall at 140 W) | **Indistinguishable** in BF16 deploy; `+1.35e-6` / `+6.46e-7` excess KL in FP16 |
+| **`W8A16` / `W4A16` / FP8-KV** | **Single-sided Dual `QMMA.SF` (`X = s(H+L/16)`, shared acc)** | **1.92×–1.95× per-GHz** (`96.1–98.9 TF/s` pre-split; `1.87×–1.89×` 2-kernel; `1.77×` online) | **True-FP64 `rel_L2` `1.67e-7–1.38e-6` (beats `cuBLAS BF16`)**; matches exact BF16 LLM quality |
+| **Pure FP16 / BF16 → FP32** | SM 12.0 TMA-WS `Pure B1` / `C1+B1` | **1.66× / 1.56× per-GHz** (`K=4096`, 1.31× / 1.25× wall at 140 W) | **Indistinguishable** in BF16 deploy; `+1.35e-6` / `+6.46e-7` excess KL in FP16 |
 | **Large-`K` Non-Zero-Mean GEMM** | `HMMA.F32 + RN16` (periodic RN flush) | **1.00×** (matches native rate) | **19×–84× more accurate** than `cuBLAS` |
 | **Zero-Compile Drop-In** (`cu128`, ~100 W) | Pure-PyTorch chunked matmul (`chunk_k=2048`) | **48.90 TFLOP/s** (**+10%** at `N=K=8192`) | Sample relative L2 error `0.001644` |
 
@@ -90,7 +91,8 @@ All measurements below were collected on the same **GB205 (RTX 5070 Ti Laptop, d
 - **End-to-end LLM quality** (`Llama-3.2-1B` full 288,768-token WikiText-2-raw & `Qwen2.5-1.5B`, every linear layer replaced, true FP64-accum reference):
   - **BF16 deployment:** Both `Pure B1` and `C1+B1` are **statistically indistinguishable** from `cuBLAS BF16→FP32`.
   - **FP16 deployment:** Absolute excess KL vs. native `HMMA.F32` is only **`+1.35e-6`** (`Pure B1`, keeping `lm_head`) and **`+6.46e-7`** (`C1+B1 + K-perm`, all layers), or `+1.03e-6` and `+4.56e-7` under the FP32-`lm_head` high-resolution lens; unflushed `Pure F16` reaches `+2.90e-4` (`23×–65×` worse).
-- **Additional paths:** For large-`K` non-zero-mean GEMMs, `HMMA.F32 + RN16` matches native speed while cutting error **`19×–84×`** vs. `cuBLAS`; a zero-compile PyTorch chunked drop-in is also included (`48.90 TFLOP/s`, `+10%`, relative L2 error `0.001644` at `N=K=8192`, `chunk_k=2048`).
+- **Single-sided Dual `QMMA.SF` (`W8A16` / `W4A16` / `FP8-KV`, recommended quantized-weight path):** Hardware probes confirm `QMMA.SF.16832` has **zero FTZ** on E4M3 subnormals (`28/28`) and a full 23-bit mantissa, letting each 32-element BF16 activation block split losslessly as $X = s(H + L/16)$ (`3,584/3,584` bit-exact over `[2⁻⁶, 256)`, covering `99.94%` of real LLM activations) into the same FP32 accumulator (`scale_L = scale_H - 4`). On `4096×14336×4096`, `W8A16` / `W4A16` reaches **`96.06 / 98.86 TF/s`** pre-split (**`1.95× / 1.92×`** per-GHz, `1.53× / 1.58×` wall), **`92.74 / 96.86 TF/s`** 2-kernel (`1.89× / 1.87×` per-GHz), and **`85.76 / 88.67 TF/s`** single-kernel online (`1.77×`), with true-FP64 `rel_L2` of `1.38e-6` / `1.67e-7` (better than `cuBLAS BF16`) and **`8.9×–10.5×`** lower 32k LLM activation KL than Single-FP8 (matching exact BF16 quality). Separately, scanning `517,031,936` real 32-element BF16 blocks across both models gives a **`0 / 517,031,936`** exact lossless INT8-affine pass rate, closing online lossless BF16→INT8 dispatch for continuous LLMs. Source: [dual_qmma_tma_ws.cu](software/dual_qmma_tma_ws.cu); CPU verifier: [verify_dual_fp8.py](software/verify_dual_fp8.py).
+- **Additional paths:** For large-`K` non-zero-mean GEMMs, `HMMA.F32 + RN16` matches native speed while cutting error **`19×–84×`** vs. `cuBLAS` (and likewise collapses biased `K=65,536` Dual `QMMA.SF` RZ drift from `4.34e-5` to `3.16e-8`); a zero-compile PyTorch chunked drop-in is also included (`48.90 TFLOP/s`, `+10%`, relative L2 error `0.001644` at `N=K=8192`, `chunk_k=2048`).
 
 > Further reading: [Route 2 deep dive & selection table](docs/route2-mma-bypass.md) · [Operator usage and PyTorch sweep](software/README.md)
 
@@ -255,6 +257,8 @@ blackwell-unlock-research/
 │   ├── README.md                    # Throughput and accuracy trade-offs
 │   ├── clamp_eval.py                # Steady-state tensor benchmark
 │   ├── chunked_fp16_matmul.py       # K-chunked FP16 GEMM with FP32 reduction
+│   ├── dual_qmma_tma_ws.cu          # SM 12.0 TMA-WS Dual QMMA.SF (W8A16/W4A16 pre-split/2-kernel/online) kernels & benchmark
+│   ├── verify_dual_fp8.py           # CPU-only verifier for Dual QMMA.SF throughput, 517M-block scan & 32k LLM KL CIs
 │   └── verify_wt2_bootstrap.py      # CPU-only verifier for 288k WikiText-2 bootstrap CIs
 ├── reports/
 │   ├── template.md                  # Hardware report template

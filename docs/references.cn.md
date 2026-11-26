@@ -15,6 +15,7 @@
 | [flashinfer-ai/flashinfer#5963](https://github.com/flashinfer-ai/flashinfer/issues/5963) | Apache-2.0 | RTX 5090 FP8 注意力 `QMMA` vs 单位缩放 `QMMA.SF` 实测 | GB202 跨卡印证 |
 | [steviecurrie/gpu-unlock-gb206](https://github.com/steviecurrie/gpu-unlock-gb206) | GPL-2.0 | GB206 基线、`FEAT_READOUT_1` 非连续解码与 Debug/Prod FMC 对照 | Debug/Prod FMC 已在 `615.71.10` 和 `620.73.04` 独立复核，见第 5 节 |
 | [shuttie/bf16-unlock-blackwell-research](https://github.com/shuttie/bf16-unlock-blackwell-research/tree/d85201e2465dfaefe347644f7a1a5129aceef049)（issue [#2](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/2) · [#3](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/3)） | CC BY 4.0（文本）；MIT / GPL-2.0-only（工具） | `595.91.07` 下 87 组 GB202 实机实验（另含 `gsp_ga10x.bin` 与 Ada `booter_load` 离线分析） | 署名整理至第 5、6 节、[recovery.cn.md](recovery.cn.md#11-实机-fspfmc-错误码与四级失败模型第三方-gb2025959107) 与 [abi-invariants.cn.md](abi-invariants.cn.md#6-第三方-gb202-实测闭环与路线-1-剩余开放线索)；不复制代码或固件 |
+| [SageAttention3 (`arXiv:2505.11594`)](https://arxiv.org/abs/2505.11594) · [SVDQuant / Nunchaku (`arXiv:2411.05007`)](https://arxiv.org/abs/2411.05007) · [RIKEN-RCCS/GEMMul8](https://github.com/RIKEN-RCCS/GEMMul8) | Apache-2.0 / MIT | 外部 Blackwell（RTX 5090）微缩放 FP4 注意力、低秩离群分支与 INT8 Ozaki-II 仿真对照 | 仅作为第三方文献定位引用，见 [route2-mma-bypass.cn.md](route2-mma-bypass.cn.md) 第 5 节，与本机 GB205 实测严格区分 |
 
 ---
 

@@ -276,6 +276,33 @@ class ArchivedJsonTests(unittest.TestCase):
                     self.assertAlmostEqual(hi_nums[1], r["excess_high_res"][0], delta=max(abs(r["excess_high_res"][0]) * 0.01, 5e-9))
                 self.assertAlmostEqual(first_number(row[3]), r["top1_high_res"], delta=0.011)
 
+    def test_route2_dual_qmma_archive_matches_report(self):
+        data = json.loads((GB205 / "route2-dual-qmma-621.01.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["schema"], "blackwell-abi-lab/route2-dual-qmma/1")
+        mod = load("software/verify_dual_fp8.py")
+        summary = mod.verify_and_summarize(data)
+        self.assertEqual(summary["total_blocks_scanned"], 517031936)
+        self.assertEqual(summary["total_int8_exact_pass"], 0)
+        doc = read("docs/route2-mma-bypass.md")
+        self.assertIn("517,031,936", doc)
+        up = next(sh for sh in data["tma_ws_bench"]["shapes"] if sh["N"] == 14336 and sh["M"] == 4096)
+        by_lbl = {r["label"]: r for r in up["results"]}
+        for lbl in (
+            "TMA-WS Dual-FP8 W8A16 (pre-split)",
+            "TMA-WS Dual-FP8 W8A16 (2-kernel)",
+            "TMA-WS Dual-FP8 W8A16 (online)",
+            "TMA-WS Dual-FP8 W4A16 (pre-split)",
+            "TMA-WS Dual-FP8 W4A16 (2-kernel)",
+            "TMA-WS Dual-FP8 W4A16 (online)",
+        ):
+            self.assertIn(f"{by_lbl[lbl]['tflops']:.2f}", doc)
+        for mid, msum in summary["llm_kl_summary"].items():
+            for w_tag in ("W8_MXFP8", "W4_MXFP4"):
+                rat = msum["quant_modes"][w_tag]["single_over_dual_ratio"][0]
+                self.assertIn(f"{rat:.1f}×", doc)
+            kv_rat = msum["fp8_kv_qkt"]["single_over_dual_ratio"][0]
+            self.assertIn(f"{kv_rat:.1f}×", doc)
+
 
 class ReportTableTests(unittest.TestCase):
     """Numbers quoted in Markdown must round to what the archived JSON says."""
