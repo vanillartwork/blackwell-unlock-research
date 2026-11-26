@@ -54,7 +54,13 @@ Route 1 proceeds in two stages, with this repository covering the engineering se
 
 ### Route 2 · Software workarounds available today
 
-Until a hardware or firmware bypass lifts the `HMMA` clamp, two software paths work immediately on stock drivers depending on precision. All measurements below were collected on the same **GB205 (RTX 5070 Ti Laptop, 140 W TDP, driver `621.01`, CUDA `13.5`)**:
+**Core mechanism:** Consumer Blackwell's 0.5× clamp is enforced per instruction class at issue time—throttled MMAs on the same SMSP must be separated by at least **32 cycles**, while the **16-cycle** tensor datapath itself runs at full rate. That yields three software workarounds that work today on stock drivers:
+
+1. **Switch to an unthrottled instruction:** Route work through full-rate opcodes outside the throttle list (unit-scale `QMMA.SF`, lossless `FP6 → E4M3` upcast, `OMMA.SF`).
+2. **Interleave to hide cooldown:** Mix throttled and unthrottled MMAs on the same SMSP at a ratio of at most **`1:2`** to fill cooldown gaps at zero gate penalty (`C1+B1`).
+3. **Short-chunk FP16 accumulation with FP32 flush:** Accumulate short tiles in full-rate `HMMA.F16` and flush periodically into FP32 to bound rounding error (`Pure B1` / chunked PyTorch matmul).
+
+All measurements below were collected on the same **GB205 (RTX 5070 Ti Laptop, 140 W TDP, driver `621.01`, CUDA `13.5`)**:
 
 | Precision & Workload | Recommended Path | Measured Throughput / Speedup | Accuracy & Error |
 | :--- | :--- | :--- | :--- |
