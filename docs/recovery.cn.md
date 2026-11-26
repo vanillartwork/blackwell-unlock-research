@@ -34,9 +34,9 @@
 | **3. 参数级硬卡死** | `gspFwHeapSize` 低于 GSP-RM 下限（如 `16 MiB` → `NV_ERR_TIMEOUT 0x65`）；`nonWprHeapSize = 4 GiB`。 | **必须重启 / 完全断电** | WPR2 保持拉起状态 |
 | **4. 无日志静默死机** | `SR_RESUME`（`s2idle`）阶段篡改 `SRMeta.magic` 或 `SRMeta.revision != 2`。 | **必须重启 / 完全断电**，且强依赖 netconsole/串口与阶段打点 | 死机前本地 `journald` 来不及落盘 |
 
-**`595.91.07` 上记录到的驱动测试坑（在更高版本开展第二步变异前应先核查）：**
-- 连续 COT 失败会触发 `hrtimer_active` 内核 oops，原因是 `kfspCleanupBootState_IMPL` 过早释放了 `pPollEvent`（原测试套件的绕法是将释放延后至 `kfspStateDestroy_IMPL`）。
-- 在 `gpuStateLoad` 之前映射 BAR1（`kbusInitBar1` 位于 `kbusStatePostLoad`，晚于 `kgspInitRm`）会触发空指针解引用 oops。引导期或引导后的主机读 FB 须走 BAR0 PRAMIN 窗口（`0x700000`），其中受保护的 WPR 区域统一返回重复哨兵 `0xbad0ac00`。
+**`595.91.07` 上记录到的主机驱动侧踩坑（与固件安全及算力限速无关；在更高版本开展第二步探测前应先核查）：**
+- **主机驱动错误恢复路径的对象生命周期 bug：** 在 `595.91.07` 上，连续 COT 失败会触发 `hrtimer_active` 内核 oops（`hrtimer.base` 为空），原因是 `kfspCleanupBootState_IMPL` 过早销毁了本属引擎生命周期的 `pPollEvent`，导致重试路径再次调度/释放已释放对象（清理顺序错误引发的 UAF；将带空指针检查的销毁延后至 `kfspStateDestroy_IMPL` 可规避）。
+- **引导早期插桩时序约束（非原版驱动 bug）：** 原版驱动在 `gpuStateLoad → kbusStatePostLoad → kbusInitBar1`（晚于 `kgspInitRm`）才初始化 BAR1 VAS 与 PTE 数组；若自定义探针在该阶段之前调用 BAR1 映射接口，会解引用未初始化的空 PTE 数组。引导期或引导后的主机读 FB 须走 BAR0 PRAMIN 窗口（`0x700000`），其中受保护的 WPR 区域统一返回重复哨兵 `0xbad0ac00`。
 
 ---
 

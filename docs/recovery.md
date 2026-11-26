@@ -34,9 +34,9 @@ The table below summarizes third-party hardware measurements on 2× RTX 5090 (GB
 | **3. Parameter-induced hard wedge** | `gspFwHeapSize` below GSP-RM minimum (e.g. `16 MiB` → `NV_ERR_TIMEOUT 0x65`); `nonWprHeapSize = 4 GiB`. | **Reboot / full power cycle** | WPR2 left armed |
 | **4. Silent hang (no local log)** | Corrupting `SRMeta.magic` or `SRMeta.revision != 2` during `SR_RESUME` (`s2idle`). | **Reboot / full power cycle**; requires netconsole/serial + phase markers | Local `journald` cannot flush before hang |
 
-**Driver-harness pitfalls recorded on `595.91.07` (verify before running Stage 2 probes on other tags):**
-- Repeated COT failure triggers a kernel oops in `hrtimer_active` because `kfspCleanupBootState_IMPL` frees `pPollEvent` prematurely (the upstream research harness moves teardown to `kfspStateDestroy_IMPL`).
-- Mapping BAR1 before `gpuStateLoad` (`kbusInitBar1` runs in `kbusStatePostLoad`, *after* `kgspInitRm`) dereferences a NULL PTE array. During or after boot, host framebuffer reads go through the BAR0 PRAMIN window (`0x700000`), where protected WPR reads return the repeating sentinel `0xbad0ac00`.
+**Host-driver pitfalls recorded on `595.91.07` (unrelated to firmware security or the tensor clamp; verify before running Stage 2 probes on other tags):**
+- *Host-driver error-recovery lifetime bug:* on `595.91.07`, repeated COT failure triggers a kernel oops in `hrtimer_active` (NULL `hrtimer.base`) because `kfspCleanupBootState_IMPL` frees the engine-lifetime `pPollEvent` prematurely, leaving the retry path to schedule and tear down a freed event (use-after-free in error cleanup; moving the NULL-guarded destroy to `kfspStateDestroy_IMPL` avoids it).
+- *Early-boot hook ordering constraint (not a stock driver bug):* calling BAR1 mapping helpers from a custom hook before `gpuStateLoad` (`kbusInitBar1` runs in `kbusStatePostLoad`, *after* `kgspInitRm`) dereferences an uninitialized NULL PTE array. During or after boot, host framebuffer reads go through the BAR0 PRAMIN window (`0x700000`), where protected WPR reads return the repeating sentinel `0xbad0ac00`.
 
 ---
 

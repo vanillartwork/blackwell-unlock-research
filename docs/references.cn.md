@@ -113,6 +113,6 @@
 
 下列实机结论均属第三方在 `595.91.07` 上的观测，与本仓库 GB205 本地采集及 `620.73.04` 静态基线严格区分：
 
-- **FSP/FMC 错误码分层与驱动测试坑。** 实测整理 17 个 FSP COT 与 FMC 解析/鉴权错误码，按“预鉴权拒绝 / WPR2 已拉起鉴权失败（`0x377`、`0x1db`、`0x33`）/ 参数硬卡死 / `SR_RESUME` 静默死机”四级归类，并记录 `595.91.07` 的 `kfspCleanupBootState_IMPL` 重试 oops 与早于 `gpuStateLoad` 映射 BAR1 的空指针坑。详见 [recovery.cn.md §1.1](recovery.cn.md#11-实机-fspfmc-错误码与四级失败模型第三方-gb2025959107)。
+- **FSP/FMC 错误码分层与主机驱动侧踩坑。** 实测整理 17 个 FSP COT 与 FMC 解析/鉴权错误码，按“预鉴权拒绝 / WPR2 已拉起鉴权失败（`0x377`、`0x1db`、`0x33`）/ 参数硬卡死 / `SR_RESUME` 静默死机”四级归类，并附带记录 `595.91.07` 上两项非固件侧的主机坑（`kfspCleanupBootState_IMPL` 在 COT 重试路径的对象生命周期 bug，以及早于 `gpuStateLoad` 映射 BAR1 的插桩时序约束）。详见 [recovery.cn.md §1.1](recovery.cn.md#11-实机-fspfmc-错误码与四级失败模型第三方-gb2025959107)。
 - **冷启字段活性、`FEAT`/FLR 时序与 `SR_RESUME` 实测。** 实机区分 `WprMeta`/COT 的活字段与忽略字段（`COT.frtsVidmemOffset` 支持 ≥ 1 GiB 1:1 平移整套 WPR；`WprMeta.frtsSize`、`verified`、`sizeOfSignature`、`bootloader{Code,Data}Offset` 被忽略；`sysmemAddrOfRadix3Elf` 被钉死；`sysmemAddrOfSignature` 为活的 4 字节对齐指针），证实 `FEAT` 在 FMC 之前即已定型、`SS0`/`SS1` 仅跨冷断电变化（跨热启与 FLR 保持）、FLR 后 `FEAT_OVR_PLM`（`0x80842bcf → 0xfffffb8f`）在 ~1.16–1.35 s 内由 GPU 侧自主 devinit 重锁，以及 `SRMeta` + 三级 `radix3` 与 `205.875 MiB` 高熵恢复密文。详见 [abi-invariants.cn.md](abi-invariants.cn.md)（§1–§3 及 [§6](abi-invariants.cn.md#6-第三方-gb202-实测闭环与路线-1-剩余开放线索)）。
 - **与本仓库的互补定位。** 对方平台停留在 `595.91.07`（因 `615+` 移除了 GSP-RM 安全启动调试串并将引擎 ucode 迁入 `NVUCODES`）；本仓库的 [620.73.04 基线](../patches/README.cn.md) 正好覆盖 post-615 新 ABI（256 B `GSP_FMC_BOOT_PARAMS`），可用于推进 `570` / `595` / `620` 跨版本差分探测。
