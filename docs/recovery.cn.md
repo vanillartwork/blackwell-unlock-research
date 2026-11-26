@@ -23,6 +23,21 @@
 | `Possible bad register read … regvalue: 0xbadf41xx` | `gpu/arch/hopper/kern_gpu_gh100.c` | `0xbadf41xx` 是 GSP 寄存器仍被 PRIV target mask 锁给 FSP 时的读回（nova-core `falcon/gsp.rs`），此时读到的 GSP 寄存器没有意义 | 寄存器地址与值；不要当作寄存器内容 |
 | `… heartbeat timed out`、Xid 109 / 154 | `gsp/kernel_gsp.c` | 请结合工作负载与前后日志判断运行期故障。仅凭 Xid 不能归因于引导 ABI。社区讨论见上游 issue [NVIDIA/open-gpu-kernel-modules#1080](https://github.com/NVIDIA/open-gpu-kernel-modules/issues/1080) | 工作负载、Xid 全文 |
 
+### 1.1 实机 FSP/FMC 错误码与四级失败模型（第三方 GB202，`595.91.07`）
+
+下表整理自第三方在 2× RTX 5090（GB202 `10de:2b85`，Linux 驱动 `595.91.07`）上的实机实验记录（[shuttie/bf16-unlock-blackwell-research](https://github.com/shuttie/bf16-unlock-blackwell-research/tree/d85201e2465dfaefe347644f7a1a5129aceef049)，CC BY 4.0；本仓库未独立复现，`615+` / `620.73.04` 行为可能存在差异）：
+
+| 失败层级 | 实测错误码 / 现象 | `595.91.07` 恢复代价 | 实测机理 |
+|---|---|---|---|
+| **1. 预鉴权拒绝** | **FSP COT（`cmd 0x14`）**：`0xd9`（`frtsVidmemSize != 0x100000`，须精确 1 MiB）、`0xd6`（`frtsVidmemOffset` 非 128 KiB 对齐）。<br>**FMC `WprMeta`**：`0x827`（`magic != 0xdc3aae21371a60b3`）、`0x828`（`revision != 1`）、`0x82e`（`sizeOfBootloader` 非 4 KiB 对齐）、`0x836`（`sizeOfBootloader` 触及 256 MiB 上限）、`0x83e`（`sysmemAddrOfRadix3Elf` 偏移/被钉死）、`0x841`（`bootloaderManifestOffset` 范围内非 0）、`0x885`（越界/对齐通用拒绝）、`0x83d`（通过 `RmDisableCotCmd=0x4` 扣留 FRTS）。<br>**`.fwsignature_gb20x`**：`0xa97`（对齐但首字 marker 不符）、`0xaaa`（`+0x10` 记录长度 `> 0x200`；有效窗 `[0x180, 0x200]`，固定步长 `0x200`，无符号回绕已证伪）、`0xa0f`（`0x87c` 表模式不在 `{1, 2}`）。<br>**镜像/签名鉴权（`0xaff`）**：`info=0x1`（槽 0/1 不匹配；槽 2/3 未校验）、`info=0x2`（明文表 `0x814–0x81c` 不匹配）、`info=0x7`（记录长度 `< 0x180`）、`info=0xb`（GSP-RM 或 `GspRmBoot` 鉴权失败）。 | **卸载/重载驱动即可恢复**（WPR2 未残留；若需保持严格冷启样本口径仍须完全断电） | 拒绝发生在 WPR2 拉起或锁定之前 |
+| **2. 鉴权失败（WPR2 已拉起）** | **FSP COT（`cmd 0x14`）**：`0x377`（COT 哈希鉴权失败）、`0x1db`（自签或非锚定公钥，先于哈希/签名校验被拒）、`0x33`（FMC 容器头或密文字节被篡改）。 | **必须重启**（重试必报 `unexpected WPR2 already up`） | FSP **先拉起 WPR2，再鉴权 COT 载荷** |
+| **3. 参数级硬卡死** | `gspFwHeapSize` 低于 GSP-RM 下限（如 `16 MiB` → `NV_ERR_TIMEOUT 0x65`）；`nonWprHeapSize = 4 GiB`。 | **必须重启 / 完全断电** | WPR2 保持拉起状态 |
+| **4. 无日志静默死机** | `SR_RESUME`（`s2idle`）阶段篡改 `SRMeta.magic` 或 `SRMeta.revision != 2`。 | **必须重启 / 完全断电**，且强依赖 netconsole/串口与阶段打点 | 死机前本地 `journald` 来不及落盘 |
+
+**`595.91.07` 上记录到的驱动测试坑（在更高版本开展第二步变异前应先核查）：**
+- 连续 COT 失败会触发 `hrtimer_active` 内核 oops，原因是 `kfspCleanupBootState_IMPL` 过早释放了 `pPollEvent`（原测试套件的绕法是将释放延后至 `kfspStateDestroy_IMPL`）。
+- 在 `gpuStateLoad` 之前映射 BAR1（`kbusInitBar1` 位于 `kbusStatePostLoad`，晚于 `kgspInitRm`）会触发空指针解引用 oops。引导期或引导后的主机读 FB 须走 BAR0 PRAMIN 窗口（`0x700000`），其中受保护的 WPR 区域统一返回重复哨兵 `0xbad0ac00`。
+
 ---
 
 ## 2. 恢复手段对比

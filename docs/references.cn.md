@@ -14,7 +14,7 @@
 | [NVIDIA/cutlass#3732](https://github.com/NVIDIA/cutlass/issues/3732) | BSD-3-Clause | SM120 FP8 `QMMA` 与单位缩放 `QMMA.SF`（`kind::mxf8f6f4`）对照 | 逐位一致与消费卡/PRO 6000 差异确认；本机 GB205 复现见第 5 节 |
 | [flashinfer-ai/flashinfer#5963](https://github.com/flashinfer-ai/flashinfer/issues/5963) | Apache-2.0 | RTX 5090 FP8 注意力 `QMMA` vs 单位缩放 `QMMA.SF` 实测 | GB202 跨卡印证 |
 | [steviecurrie/gpu-unlock-gb206](https://github.com/steviecurrie/gpu-unlock-gb206) | GPL-2.0 | GB206 基线、`FEAT_READOUT_1` 非连续解码与 Debug/Prod FMC 对照 | Debug/Prod FMC 已在 `615.71.10` 和 `620.73.04` 独立复核，见第 5 节 |
-| [shuttie/bf16-unlock-blackwell-research#2](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/2) · [#3](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/3) | — | `gsp_ga10x.bin` 内部路径及 AD102/GA102 `booter_load` 离线分析 | 第三方基于 `595.91.07` / `596.49` 的离线静态/模拟分析，非真机实测，见第 5 节 |
+| [shuttie/bf16-unlock-blackwell-research](https://github.com/shuttie/bf16-unlock-blackwell-research/tree/d85201e2465dfaefe347644f7a1a5129aceef049)（issue [#2](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/2) · [#3](https://github.com/shuttie/bf16-unlock-blackwell-research/issues/3)） | CC BY 4.0（文本）；MIT / GPL-2.0-only（工具） | `595.91.07` 下 87 组 GB202 实机实验（另含 `gsp_ga10x.bin` 与 Ada `booter_load` 离线分析） | 署名整理至第 5、6 节、[recovery.cn.md](recovery.cn.md#11-实机-fspfmc-错误码与四级失败模型第三方-gb2025959107) 与 [abi-invariants.cn.md](abi-invariants.cn.md#6-第三方-gb202-实测闭环与路线-1-剩余开放线索)；不复制代码或固件 |
 
 ---
 
@@ -104,3 +104,15 @@
   - **GSP-RM 写入链与 Control Handler 普查。** 在 `595.91.07`（GB202，#3）与 `596.49` / `595.71.05`（GB206，#2）中均追踪到 `engine-start → Graphics+0xa58 → Graphics+0x938` 写 `0x381c`/`0x3820`，说明 GSP-RM 在引擎初始化时确实尝试写入，但受 PL2 权限限制会被 `FEAT_OVR_PLM`（PL3-only）硬件丢弃。`595.91.07` 的 1,516 个非空 RM Control Handler 中成功反编译 1,363 个（153 个反编译失败），已反编译项无一调用 BAR0 端口助手；公有读取接口（`0x20801230` / `0x2080123c`）仅读内存缓存；全镜像扫描未见写 `0x823804` 的 RM 路径。
   - **注册表开关、LPWR slot-1 与 `PMU_RISCV_EB`。** 在 `596.49` GB206 的 Unicorn 有界仿真中（#2）：合成输入下 `RMDisableFeatureDisablement`（`GPU+0x545a`）仅改变零值回退逻辑，不将非零缓存值 `1/2/3` 清零；`OBJPGCTRL` 的 LPWR slot-1 捕获仅对 Turing（ordinal `37..41`）开启，GB206（`70`）已禁用；`PMU_RISCV_EB`（`falconId=26`）携带 4,944 B `LSF_UCODE_DESC_WRAPPER`（`bLsEncrypted=1`，熵 `7.9999`），属 Light Secure（LS / PL2），无 PL3 写权限。
   - **Ada `booter_load` 栈溢出机理。** 对公开 `595.91.07` AD102/GA102 debug `BooterLoadUcode` 的 Falcon 静态反汇编（#3 评论 `6863650651`）显示，签名加载器（`0x6456`/`0x6556`）缺失对 `sp+0x48` 处 `0x40` B 栈缓冲区的上界校验，在 `host_length ∈ (0x40, 0x60]` 时可越界改写 `sp+0x88` 栈帧而不触发 `sp+0xa8` 处的栈金丝雀。Blackwell 已完全移除 SEC2 `booter_load` 阶段。
+
+---
+
+## 6. 第三方 GB202 实机实验汇总（`shuttie/bf16-unlock-blackwell-research`，`d85201e2465d`）
+
+2026-11-26 核查自 [shuttie/bf16-unlock-blackwell-research](https://github.com/shuttie/bf16-unlock-blackwell-research/tree/d85201e2465dfaefe347644f7a1a5129aceef049)（commit `d85201e2465d`，2026-11-05；文本采用 **CC BY 4.0** 许可；本仓库未复制任何工具源码或固件）。测试平台为 **2× RTX 5090（GB202 `10de:2b85`）**、Linux 驱动/GSP-RM **`595.91.07`**，另附一张 `615.71.09` 下的 **RTX PRO 6000（`10de:2bb1`）** 对照（`FEAT_READOUT_1 = 0`，518 TFLOP/s BF16→FP32）。
+
+下列实机结论均属第三方在 `595.91.07` 上的观测，与本仓库 GB205 本地采集及 `620.73.04` 静态基线严格区分：
+
+- **FSP/FMC 错误码分层与驱动测试坑。** 实测整理 17 个 FSP COT 与 FMC 解析/鉴权错误码，按“预鉴权拒绝 / WPR2 已拉起鉴权失败（`0x377`、`0x1db`、`0x33`）/ 参数硬卡死 / `SR_RESUME` 静默死机”四级归类，并记录 `595.91.07` 的 `kfspCleanupBootState_IMPL` 重试 oops 与早于 `gpuStateLoad` 映射 BAR1 的空指针坑。详见 [recovery.cn.md §1.1](recovery.cn.md#11-实机-fspfmc-错误码与四级失败模型第三方-gb2025959107)。
+- **冷启字段活性、`FEAT`/FLR 时序与 `SR_RESUME` 实测。** 实机区分 `WprMeta`/COT 的活字段与忽略字段（`COT.frtsVidmemOffset` 支持 ≥ 1 GiB 1:1 平移整套 WPR；`WprMeta.frtsSize`、`verified`、`sizeOfSignature`、`bootloader{Code,Data}Offset` 被忽略；`sysmemAddrOfRadix3Elf` 被钉死；`sysmemAddrOfSignature` 为活的 4 字节对齐指针），证实 `FEAT` 在 FMC 之前即已定型、`SS0`/`SS1` 仅跨冷断电变化（跨热启与 FLR 保持）、FLR 后 `FEAT_OVR_PLM`（`0x80842bcf → 0xfffffb8f`）在 ~1.16–1.35 s 内由 GPU 侧自主 devinit 重锁，以及 `SRMeta` + 三级 `radix3` 与 `205.875 MiB` 高熵恢复密文。详见 [abi-invariants.cn.md](abi-invariants.cn.md)（§1–§3 及 [§6](abi-invariants.cn.md#6-第三方-gb202-实测闭环与路线-1-剩余开放线索)）。
+- **与本仓库的互补定位。** 对方平台停留在 `595.91.07`（因 `615+` 移除了 GSP-RM 安全启动调试串并将引擎 ucode 迁入 `NVUCODES`）；本仓库的 [620.73.04 基线](../patches/README.cn.md) 正好覆盖 post-615 新 ABI（256 B `GSP_FMC_BOOT_PARAMS`），可用于推进 `570` / `595` / `620` 跨版本差分探测。

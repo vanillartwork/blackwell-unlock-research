@@ -23,6 +23,21 @@ The strings below come from `open-gpu-kernel-modules` 620.73.04. The mailbox int
 | `Possible bad register read … regvalue: 0xbadf41xx` | `gpu/arch/hopper/kern_gpu_gh100.c` | This readback can appear while the PRIV target mask restricts GSP access to FSP (`nova-core`, `falcon/gsp.rs`). | Address and returned word |
 | `… heartbeat timed out`, Xid 109 / 154 | `gsp/kernel_gsp.c` | Investigate the runtime workload and surrounding log before attributing a failure to the boot ABI. | Workload and complete Xid messages. [Upstream report #1080](https://github.com/NVIDIA/open-gpu-kernel-modules/issues/1080) |
 
+### 1.1 Observed FSP/FMC error codes and failure tiers (third-party GB202, `595.91.07`)
+
+The table below summarizes third-party hardware measurements on 2× RTX 5090 (GB202 `10de:2b85`, Linux driver `595.91.07`) reported in [shuttie/bf16-unlock-blackwell-research](https://github.com/shuttie/bf16-unlock-blackwell-research/tree/d85201e2465dfaefe347644f7a1a5129aceef049) (CC BY 4.0; not independently reproduced here; behavior on `615+` / `620.73.04` may differ).
+
+| Failure tier | Observed error codes / symptoms | Recovery cost on `595.91.07` | Observed mechanism |
+|---|---|---|---|
+| **1. Pre-auth refusal** | **FSP COT (`cmd 0x14`)**: `0xd9` (`frtsVidmemSize != 0x100000`, must be exact 1 MiB), `0xd6` (`frtsVidmemOffset` not 128 KiB-aligned).<br>**FMC `WprMeta`**: `0x827` (`magic != 0xdc3aae21371a60b3`), `0x828` (`revision != 1`), `0x82e` (`sizeOfBootloader` not 4 KiB-aligned), `0x836` (`sizeOfBootloader` hits 256 MiB limit), `0x83e` (`sysmemAddrOfRadix3Elf` moved / pinned), `0x841` (`bootloaderManifestOffset != 0` in range), `0x885` (out-of-range / alignment refusal), `0x83d` (FRTS withheld via `RmDisableCotCmd=0x4`).<br>**`.fwsignature_gb20x`**: `0xa97` (aligned pointer, wrong first-word marker), `0xaaa` (`+0x10` record size `> 0x200`; valid window `[0x180, 0x200]`, fixed `0x200` stride, no unsigned wrap), `0xa0f` (`0x87c` table mode outside `{1, 2}`).<br>**Image/sig auth (`0xaff`)**: `info=0x1` (slot 0/1 mismatch; slots 2/3 unverified), `info=0x2` (plaintext table `0x814–0x81c` mismatch), `info=0x7` (record size `< 0x180`), `info=0xb` (GSP-RM or `GspRmBoot` auth failure). | **Driver reload** (WPR2 not left up; cold-boot classification still requires a full power cycle) | Rejected before WPR2 is armed or finalized |
+| **2. Post-WPR2 auth failure** | **FSP COT (`cmd 0x14`)**: `0x377` (COT hash auth failure), `0x1db` (self-signed or unanchored public key, rejected before hash/sig check), `0x33` (FMC container header or ciphertext byte tampered). | **Reboot required** (subsequent retries fail with `unexpected WPR2 already up`) | FSP arms WPR2 *before* authenticating the COT payload |
+| **3. Parameter-induced hard wedge** | `gspFwHeapSize` below GSP-RM minimum (e.g. `16 MiB` → `NV_ERR_TIMEOUT 0x65`); `nonWprHeapSize = 4 GiB`. | **Reboot / full power cycle** | WPR2 left armed |
+| **4. Silent hang (no local log)** | Corrupting `SRMeta.magic` or `SRMeta.revision != 2` during `SR_RESUME` (`s2idle`). | **Reboot / full power cycle**; requires netconsole/serial + phase markers | Local `journald` cannot flush before hang |
+
+**Driver-harness pitfalls recorded on `595.91.07` (verify before running Stage 2 probes on other tags):**
+- Repeated COT failure triggers a kernel oops in `hrtimer_active` because `kfspCleanupBootState_IMPL` frees `pPollEvent` prematurely (the upstream research harness moves teardown to `kfspStateDestroy_IMPL`).
+- Mapping BAR1 before `gpuStateLoad` (`kbusInitBar1` runs in `kbusStatePostLoad`, *after* `kgspInitRm`) dereferences a NULL PTE array. During or after boot, host framebuffer reads go through the BAR0 PRAMIN window (`0x700000`), where protected WPR reads return the repeating sentinel `0xbad0ac00`.
+
 ---
 
 ## 2. Recovery scope
