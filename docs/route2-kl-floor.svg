@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="446" viewBox="0 0 780 446" role="img" aria-label="Additive KL Error Decomposition · Backbone Floor + lm_head Floor + Method Excess">
+<style>
+  text{font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace}
+  .card{fill:#ffffff;stroke:#c9d5d1;stroke-width:1}
+  .mast{fill:#102f35}
+  .mast-accent{fill:#8ad8ac}
+  .mast-title{fill:#f0f9f4;font-size:15px;font-weight:700}
+  .mast-sub{fill:#bfd1ce;font-size:10.8px}
+  .fg{fill:#162b30}
+  .mut{fill:#485f62}
+  .ex-txt{fill:#c84b18}
+  .grid{stroke:#e6eeea;stroke-width:1;stroke-dasharray:2,3}
+  .axis{stroke:#9ab0ad;stroke-width:1}
+  .b-bb{fill:#1d5b68}
+  .b-lm{fill:#5aa79a}
+  .b-ex{fill:#e06d33}
+  .brk{fill:none;stroke:#ffffff;stroke-width:2.2}
+  @media (prefers-color-scheme:dark){
+    .card{fill:#0d1417;stroke:#24353b}
+    .mast{fill:#0b2227}
+    .fg{fill:#e6f1ee}
+    .mut{fill:#8fa6aa}
+    .ex-txt{fill:#f59454}
+    .grid{stroke:#19272c}
+    .axis{stroke:#395258}
+    .b-bb{fill:#34889a}
+    .b-lm{fill:#62b89e}
+    .b-ex{fill:#f08448}
+    .brk{stroke:#0d1417}
+  }
+</style>
+<rect class="card" x="0.5" y="0.5" width="779" height="445" rx="8"/>
+<path class="mast" d="M8,1 H772 Q779,1 779,8 V62 H1 V8 Q1,1 8,1 Z"/>
+<rect class="mast-accent" x="1" y="62" width="778" height="3"/>
+<text class="mast-title" x="22" y="29">Additive KL Error Decomposition · Backbone Floor + lm_head Floor + Method Excess</text>
+<text class="mast-sub" x="22" y="49">Llama-3.2-1B: FP16 on full 288k true-FP64 ref; BF16 scales ~64x (~(2^3)^2); both show a ~35% backbone / ~65% lm_head floor split</text>
+
+<!-- Legend -->
+<rect class="b-bb" x="22" y="79" width="14" height="10" rx="2"/>
+<text class="fg" x="42" y="88" font-size="11">Backbone rounding saturation floor (~35%)</text>
+<rect class="b-lm" x="280" y="79" width="14" height="10" rx="2"/>
+<text class="fg" x="300" y="88" font-size="11">lm_head output quantization floor (~65%)</text>
+<rect class="b-ex" x="546" y="79" width="14" height="10" rx="2"/>
+<text class="fg" x="566" y="88" font-size="11">Method excess KL (vs. Mode0)</text>
+
+<!-- Panel titles -->
+<text class="fg" x="236" y="122" font-size="11.5" font-weight="600" text-anchor="middle">FP16 Backbone (288k true FP64, units of 1e-6 KL)</text>
+<text class="fg" x="614" y="122" font-size="11.5" font-weight="600" text-anchor="middle">BF16 Backbone (FP32-RN, units of 1e-4 KL, ~64x scale)</text>
+
+<!-- Left panel: FP16 -->
+<line class="grid" x1="54" y1="344.0" x2="428" y2="344.0"/>
+<text class="mut mono" x="47" y="347.5" font-size="10" text-anchor="end">0</text>
+<line class="grid" x1="54" y1="293.5" x2="428" y2="293.5"/>
+<text class="mut mono" x="47" y="297.0" font-size="10" text-anchor="end">4.5</text>
+<line class="grid" x1="54" y1="243.0" x2="428" y2="243.0"/>
+<text class="mut mono" x="47" y="246.5" font-size="10" text-anchor="end">9</text>
+<line class="grid" x1="54" y1="192.5" x2="428" y2="192.5"/>
+<text class="mut mono" x="47" y="196.0" font-size="10" text-anchor="end">13.5</text>
+<line class="grid" x1="54" y1="142.0" x2="428" y2="142.0"/>
+<text class="mut mono" x="47" y="145.5" font-size="10" text-anchor="end">18</text>
+<line class="axis" x1="54" y1="344" x2="428" y2="344"/>
+<line class="axis" x1="54" y1="142" x2="54" y2="344"/>
+<rect class="b-bb" x="67.7" y="292.5" width="34.9" height="51.5"/>
+<rect class="b-lm" x="67.7" y="197.1" width="34.9" height="95.4"/>
+<text class="fg mono" x="85.2" y="192.1" font-size="9.5" text-anchor="middle">13.1</text>
+<text class="fg" x="85.2" y="358" font-size="9.5" text-anchor="middle">Mode0</text>
+<text class="mut" x="85.2" y="370" font-size="9" text-anchor="middle">(F32)</text>
+<rect class="b-bb" x="130.0" y="292.5" width="34.9" height="51.5"/>
+<rect class="b-lm" x="130.0" y="197.1" width="34.9" height="95.4"/>
+<rect class="b-ex" x="130.0" y="189.8" width="34.9" height="7.3"/>
+<text class="fg mono" x="147.5" y="184.8" font-size="9.5" text-anchor="middle">13.7</text>
+<text class="fg" x="147.5" y="358" font-size="9.5" text-anchor="middle">C1+B1</text>
+<text class="mut" x="147.5" y="370" font-size="9" text-anchor="middle">+Kperm</text>
+<rect class="b-bb" x="192.4" y="292.5" width="34.9" height="51.5"/>
+<rect class="b-lm" x="192.4" y="197.1" width="34.9" height="95.4"/>
+<rect class="b-ex" x="192.4" y="188.0" width="34.9" height="9.1"/>
+<text class="fg mono" x="209.8" y="183.0" font-size="9.5" text-anchor="middle">13.9</text>
+<text class="fg" x="209.8" y="358" font-size="9.5" text-anchor="middle">C1+B1</text>
+<text class="mut" x="209.8" y="370" font-size="9" text-anchor="middle">no-perm</text>
+<rect class="b-bb" x="254.7" y="292.5" width="34.9" height="51.5"/>
+<rect class="b-lm" x="254.7" y="197.1" width="34.9" height="95.4"/>
+<rect class="b-ex" x="254.7" y="182.0" width="34.9" height="15.2"/>
+<text class="fg mono" x="272.2" y="177.0" font-size="9.5" text-anchor="middle">14.4</text>
+<text class="fg" x="272.2" y="358" font-size="9.5" text-anchor="middle">Pure B1</text>
+<text class="mut" x="272.2" y="370" font-size="9" text-anchor="middle">(keep)</text>
+<rect class="b-bb" x="317.0" y="292.5" width="34.9" height="51.5"/>
+<rect class="b-lm" x="317.0" y="197.1" width="34.9" height="95.4"/>
+<rect class="b-ex" x="317.0" y="177.5" width="34.9" height="19.6"/>
+<text class="fg mono" x="334.5" y="172.5" font-size="9.5" text-anchor="middle">14.8</text>
+<text class="fg" x="334.5" y="358" font-size="9.5" text-anchor="middle">Pure B1</text>
+<text class="mut" x="334.5" y="370" font-size="9" text-anchor="middle">(ALL)</text>
+<rect class="b-bb" x="379.4" y="292.5" width="34.9" height="51.5"/>
+<rect class="b-lm" x="379.4" y="197.1" width="34.9" height="95.4"/>
+<rect class="b-ex" x="379.4" y="142.0" width="34.9" height="55.1"/>
+<path class="brk" d="M377.4,163.0 l11.6,-5 l11.6,5 l15.6,-5"/>
+<path class="brk" d="M377.4,168.0 l11.6,-5 l11.6,5 l15.6,-5"/>
+<text class="ex-txt mono" x="396.8" y="136.0" font-size="10" font-weight="700" text-anchor="middle">303</text>
+<text class="fg" x="396.8" y="358" font-size="9.5" text-anchor="middle">Pure F16</text>
+<text class="mut" x="396.8" y="370" font-size="9" text-anchor="middle">(no fl)</text>
+
+<!-- Right panel: BF16 -->
+<line class="grid" x1="488" y1="344.0" x2="754" y2="344.0"/>
+<text class="mut mono" x="481" y="347.5" font-size="10" text-anchor="end">0</text>
+<line class="grid" x1="488" y1="293.5" x2="754" y2="293.5"/>
+<text class="mut mono" x="481" y="297.0" font-size="10" text-anchor="end">3.5</text>
+<line class="grid" x1="488" y1="243.0" x2="754" y2="243.0"/>
+<text class="mut mono" x="481" y="246.5" font-size="10" text-anchor="end">7</text>
+<line class="grid" x1="488" y1="192.5" x2="754" y2="192.5"/>
+<text class="mut mono" x="481" y="196.0" font-size="10" text-anchor="end">10.5</text>
+<line class="grid" x1="488" y1="142.0" x2="754" y2="142.0"/>
+<text class="mut mono" x="481" y="145.5" font-size="10" text-anchor="end">14</text>
+<line class="axis" x1="488" y1="344" x2="754" y2="344"/>
+<line class="axis" x1="488" y1="142" x2="488" y2="344"/>
+<rect class="b-bb" x="502.6" y="302.7" width="37.2" height="41.3"/>
+<rect class="b-lm" x="502.6" y="224.8" width="37.2" height="77.9"/>
+<text class="fg mono" x="521.2" y="219.8" font-size="9.5" text-anchor="middle">8.3</text>
+<text class="fg" x="521.2" y="358" font-size="9.5" text-anchor="middle">Mode0</text>
+<text class="mut" x="521.2" y="370" font-size="9" text-anchor="middle">(F32)</text>
+<rect class="b-bb" x="569.1" y="303.3" width="37.2" height="40.7"/>
+<rect class="b-lm" x="569.1" y="225.8" width="37.2" height="77.5"/>
+<text class="fg mono" x="587.8" y="220.8" font-size="9.5" text-anchor="middle">8.2</text>
+<text class="fg" x="587.8" y="358" font-size="9.5" text-anchor="middle">C1+B1</text>
+<text class="mut" x="587.8" y="370" font-size="9" text-anchor="middle">+Kperm</text>
+<rect class="b-bb" x="635.6" y="302.3" width="37.2" height="41.7"/>
+<rect class="b-lm" x="635.6" y="224.0" width="37.2" height="78.3"/>
+<text class="fg mono" x="654.2" y="219.0" font-size="9.5" text-anchor="middle">8.3</text>
+<text class="fg" x="654.2" y="358" font-size="9.5" text-anchor="middle">Pure B1</text>
+<text class="mut" x="654.2" y="370" font-size="9" text-anchor="middle">(keep)</text>
+<rect class="b-bb" x="702.1" y="302.7" width="37.2" height="41.3"/>
+<rect class="b-lm" x="702.1" y="224.8" width="37.2" height="77.9"/>
+<rect class="b-ex" x="702.1" y="162.2" width="37.2" height="62.6"/>
+<text class="fg mono" x="720.8" y="157.2" font-size="9.5" text-anchor="middle">12.6</text>
+<text class="fg" x="720.8" y="358" font-size="9.5" text-anchor="middle">Pure F16</text>
+<text class="mut" x="720.8" y="370" font-size="9" text-anchor="middle">(no fl)</text>
+
+<!-- Footnote -->
+<text class="mut" x="22" y="410" font-size="10.2">Note: BF16 axis scale (1e-4) is ~64x FP16 (1e-6). Unflushed Pure F16 hits 303e-6 on FP16 (15x off-scale, broken bar) and 12.6e-4 on BF16.</text>
+<text class="mut mono" x="22" y="428" font-size="9.8">FP16: 4.59e-6 (35.0%) + 8.50e-6 (65.0%) = 13.09e-6  |  BF16: 2.86e-4 (34.6%) + 5.40e-4 (65.4%) = 8.26e-4  |  BF16/FP16 ratio: ~63.1x (both floors ~64x)</text>
+</svg>

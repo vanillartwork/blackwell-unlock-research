@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="420" viewBox="0 0 780 420" role="img" aria-label="逐层离散舍入饱和曲线 · 隐藏态元素翻转比例（相对真 FP64 累加）">
+<style>
+  text{font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace}
+  .card{fill:#ffffff;stroke:#c9d5d1;stroke-width:1}
+  .mast{fill:#102f35}
+  .mast-accent{fill:#8ad8ac}
+  .mast-title{fill:#f0f9f4;font-size:15px;font-weight:700}
+  .mast-sub{fill:#bfd1ce;font-size:11px}
+  .fg{fill:#162b30}
+  .mut{fill:#485f62}
+  .grid{stroke:#e6eeea;stroke-width:1;stroke-dasharray:2,3}
+  .axis{stroke:#9ab0ad;stroke-width:1}
+  .band{fill:#8ad8ac;fill-opacity:0.18}
+  .ln-rn{fill:none;stroke:#1d6f8a;stroke-width:2.2}
+  .ln-m0{fill:none;stroke:#2d9d6f;stroke-width:1.8;stroke-dasharray:5,3}
+  .ln-b1{fill:none;stroke:#d96b27;stroke-width:2.2}
+  .ln-bf{fill:none;stroke:#7b52ab;stroke-width:1.8;stroke-dasharray:2,2.5}
+  @media (prefers-color-scheme:dark){
+    .card{fill:#0d1417;stroke:#24353b}
+    .mast{fill:#0b2227}
+    .fg{fill:#e6f1ee}
+    .mut{fill:#8fa6aa}
+    .grid{stroke:#19272c}
+    .axis{stroke:#395258}
+    .band{fill:#66c796;fill-opacity:0.16}
+    .ln-rn{stroke:#58b8d6}
+    .ln-m0{stroke:#66d19e}
+    .ln-b1{stroke:#f59454}
+    .ln-bf{stroke:#b794e6}
+  }
+</style>
+<rect class="card" x="0.5" y="0.5" width="779" height="419" rx="8"/>
+<path class="mast" d="M8,1 H772 Q779,1 779,8 V62 H1 V8 Q1,1 8,1 Z"/>
+<rect class="mast-accent" x="1" y="62" width="778" height="3"/>
+<text class="mast-title" x="22" y="29">逐层离散舍入饱和曲线 · 隐藏态元素翻转比例（相对真 FP64 累加）</text>
+<text class="mast-sub" x="22" y="49">即便单层误差仅 1.4e-7 的 IEEE FP32-RN，也在 L5–L9 收敛至与 Pure B1 相同的 ~85%–87% 网格饱和平台</text>
+
+<!-- Legend -->
+<line class="ln-rn" x1="22" y1="84" x2="44" y2="84"/>
+<text class="fg" x="50" y="88" font-size="11">FP32-RN (FP16 骨干)</text>
+<line class="ln-m0" x1="205" y1="84" x2="227" y2="84"/>
+<text class="fg" x="233" y="88" font-size="11">Native HMMA.F32 (Mode0)</text>
+<line class="ln-b1" x1="415" y1="84" x2="437" y2="84"/>
+<text class="fg" x="443" y="88" font-size="11">Pure B1 (N=3)</text>
+<line class="ln-bf" x1="560" y1="84" x2="582" y2="84"/>
+<text class="fg" x="588" y="88" font-size="11">FP32-RN (BF16 骨干)</text>
+
+<!-- Panel titles -->
+<text class="fg" x="223.0" y="118" font-size="12" font-weight="600" text-anchor="middle">Llama-3.2-1B（16 层，FP16 与 BF16）</text>
+<text class="fg" x="602.0" y="118" font-size="12" font-weight="600" text-anchor="middle">Qwen2.5-1.5B（28 层，FP16）</text>
+
+<!-- Left panel: Llama-3.2-1B -->
+<line class="grid" x1="68" y1="342.0" x2="378" y2="342.0"/>
+<text class="mut mono" x="60" y="345.5" font-size="10" text-anchor="end">20%</text>
+<line class="grid" x1="68" y1="289.5" x2="378" y2="289.5"/>
+<text class="mut mono" x="60" y="293.0" font-size="10" text-anchor="end">40%</text>
+<line class="grid" x1="68" y1="237.0" x2="378" y2="237.0"/>
+<text class="mut mono" x="60" y="240.5" font-size="10" text-anchor="end">60%</text>
+<line class="grid" x1="68" y1="184.5" x2="378" y2="184.5"/>
+<text class="mut mono" x="60" y="188.0" font-size="10" text-anchor="end">80%</text>
+<line class="grid" x1="68" y1="132.0" x2="378" y2="132.0"/>
+<text class="mut mono" x="60" y="135.5" font-size="10" text-anchor="end">100%</text>
+<rect class="band" x="68" y="163.5" width="310" height="10.5"/>
+<line class="grid" x1="68.0" y1="132" x2="68.0" y2="342"/>
+<text class="mut mono" x="68.0" y="357" font-size="10" text-anchor="middle">L0</text>
+<line class="grid" x1="130.0" y1="132" x2="130.0" y2="342"/>
+<text class="mut mono" x="130.0" y="357" font-size="10" text-anchor="middle">L3</text>
+<line class="grid" x1="192.0" y1="132" x2="192.0" y2="342"/>
+<text class="mut mono" x="192.0" y="357" font-size="10" text-anchor="middle">L6</text>
+<line class="grid" x1="254.0" y1="132" x2="254.0" y2="342"/>
+<text class="mut mono" x="254.0" y="357" font-size="10" text-anchor="middle">L9</text>
+<line class="grid" x1="316.0" y1="132" x2="316.0" y2="342"/>
+<text class="mut mono" x="316.0" y="357" font-size="10" text-anchor="middle">L12</text>
+<line class="grid" x1="378.0" y1="132" x2="378.0" y2="342"/>
+<text class="mut mono" x="378.0" y="357" font-size="10" text-anchor="middle">L15</text>
+<line class="axis" x1="68" y1="342" x2="378" y2="342"/>
+<line class="axis" x1="68" y1="132" x2="68" y2="342"/>
+<polyline class="ln-b1" points="68.0,211.7 88.7,180.1 109.3,172.2 130.0,168.5 150.7,166.4 171.3,164.7 192.0,162.8 212.7,163.6 233.3,164.8 254.0,167.6 274.7,168.2 295.3,167.5 316.0,165.3 336.7,163.9 357.3,163.3 378.0,167.6"/>
+<polyline class="ln-m0" points="68.0,270.5 88.7,197.7 109.3,182.2 130.0,174.9 150.7,171.1 171.3,168.9 192.0,166.4 212.7,167.4 233.3,168.9 254.0,172.1 274.7,172.9 295.3,172.1 316.0,170.0 336.7,169.1 357.3,168.0 378.0,172.8"/>
+<polyline class="ln-rn" points="68.0,306.1 88.7,205.9 109.3,185.3 130.0,176.7 150.7,172.3 171.3,169.7 192.0,166.9 212.7,167.7 233.3,169.4 254.0,172.4 274.7,173.1 295.3,172.0 316.0,170.0 336.7,168.8 357.3,167.9 378.0,172.8"/>
+<polyline class="ln-bf" points="68.0,312.9 88.7,207.7 109.3,185.7 130.0,176.8 150.7,172.4 171.3,169.7 192.0,166.8 212.7,167.5 233.3,169.3 254.0,172.2 274.7,172.9 295.3,172.0 316.0,170.0 336.7,168.9 357.3,168.0 378.0,173.0"/>
+<text class="mut" x="372" y="154.3" font-size="10" text-anchor="end">~85%–87% 饱和平台</text>
+
+<!-- Right panel: Qwen2.5-1.5B -->
+<line class="grid" x1="448" y1="342.0" x2="756" y2="342.0"/>
+<text class="mut mono" x="440" y="345.5" font-size="10" text-anchor="end">20%</text>
+<line class="grid" x1="448" y1="289.5" x2="756" y2="289.5"/>
+<text class="mut mono" x="440" y="293.0" font-size="10" text-anchor="end">40%</text>
+<line class="grid" x1="448" y1="237.0" x2="756" y2="237.0"/>
+<text class="mut mono" x="440" y="240.5" font-size="10" text-anchor="end">60%</text>
+<line class="grid" x1="448" y1="184.5" x2="756" y2="184.5"/>
+<text class="mut mono" x="440" y="188.0" font-size="10" text-anchor="end">80%</text>
+<line class="grid" x1="448" y1="132.0" x2="756" y2="132.0"/>
+<text class="mut mono" x="440" y="135.5" font-size="10" text-anchor="end">100%</text>
+<rect class="band" x="448" y="163.5" width="308" height="10.5"/>
+<line class="grid" x1="448.0" y1="132" x2="448.0" y2="342"/>
+<text class="mut mono" x="448.0" y="357" font-size="10" text-anchor="middle">L0</text>
+<line class="grid" x1="505.0" y1="132" x2="505.0" y2="342"/>
+<text class="mut mono" x="505.0" y="357" font-size="10" text-anchor="middle">L5</text>
+<line class="grid" x1="562.1" y1="132" x2="562.1" y2="342"/>
+<text class="mut mono" x="562.1" y="357" font-size="10" text-anchor="middle">L10</text>
+<line class="grid" x1="619.1" y1="132" x2="619.1" y2="342"/>
+<text class="mut mono" x="619.1" y="357" font-size="10" text-anchor="middle">L15</text>
+<line class="grid" x1="676.1" y1="132" x2="676.1" y2="342"/>
+<text class="mut mono" x="676.1" y="357" font-size="10" text-anchor="middle">L20</text>
+<line class="grid" x1="756.0" y1="132" x2="756.0" y2="342"/>
+<text class="mut mono" x="756.0" y="357" font-size="10" text-anchor="middle">L27</text>
+<line class="axis" x1="448" y1="342" x2="756" y2="342"/>
+<line class="axis" x1="448" y1="132" x2="448" y2="342"/>
+<polyline class="ln-b1" points="448.0,204.7 459.4,189.7 470.8,183.8 482.2,178.1 493.6,174.5 505.0,170.4 516.4,169.0 527.9,168.4 539.3,167.1 550.7,164.7 562.1,164.6 573.5,164.8 584.9,164.4 596.3,162.8 607.7,161.1 619.1,161.5 630.5,161.0 641.9,161.7 653.3,161.7 664.7,163.6 676.1,164.0 687.6,166.2 699.0,167.5 710.4,167.7 721.8,165.9 733.2,164.9 744.6,162.8 756.0,162.4"/>
+<polyline class="ln-rn" points="448.0,308.8 459.4,232.4 470.8,208.0 482.2,195.4 493.6,187.9 505.0,181.1 516.4,178.8 527.9,176.9 539.3,174.8 550.7,171.5 562.1,171.1 573.5,171.1 584.9,170.3 596.3,168.1 607.7,166.1 619.1,166.5 630.5,165.8 641.9,166.4 653.3,166.3 664.7,168.5 676.1,168.9 687.6,171.5 699.0,172.6 710.4,172.9 721.8,170.8 733.2,170.1 744.6,167.5 756.0,166.5"/>
+<text class="mut" x="750" y="154.3" font-size="10" text-anchor="end">~85%–87% 饱和平台</text>
+
+<!-- Axis labels & footnote -->
+<text class="mut" x="18" y="237.0" font-size="11" text-anchor="middle" transform="rotate(-90 18 237.0)">相对真 FP64 发生翻转的元素比例 (%)</text>
+<text class="mut" x="223.0" y="376" font-size="10.5" text-anchor="middle">Transformer 层深度</text>
+<text class="mut" x="602.0" y="376" font-size="10.5" text-anchor="middle">Transformer 层深度</text>
+<text class="mut" x="22" y="404" font-size="10.5">末层 rel_L2（Llama L15）：FP16 = 1.69e-3，BF16 = 1.31e-2（比值 7.75× ≈ 8 = 2³，平方后对应高分辨率骨干 KL 约 64× 缩放）</text>
+</svg>

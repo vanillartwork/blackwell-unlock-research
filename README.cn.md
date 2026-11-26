@@ -56,8 +56,8 @@
 
 在硬件或固件层面解开 `HMMA` 限制之前，现有驱动上可按计算精度选用两条软件路径：
 
-- **FP8 / 混合 FP8 与 FP4（`QMMA.SF` / `OMMA.SF` / CUDA 13.2+，无损满速）。** 传统 `QMMA` 被锁在 `1024 FLOP/SM/clk`（`0.50×`），但 Blackwell 新增的块缩放 `QMMA.SF.16832`（`kind::mxf8f6f4` 配常量单位 UE8M0 缩放 `0x7F7F7F7F`）**只要至少一个操作数为 8-bit 浮点（`e4m3`、`e5m2` 或 SASS 修补出的未公开 `E3M4FN` 类型码 `2`）即可跑满 `~2045 FLOP/SM/clk`**（`2.00×`、`0 / 33,554,432` 位差异），覆盖 `e4m3×e4m3`、`e5m2×e5m2`、`e4m3×e5m2`、`E3M4FN×E3M4FN`、混合 `FP8×FP6` / `FP8×FP4` 以及 2:4 稀疏 `QMMA.SF.SP`（**`4026.4 FLOP/SM/clk`**，`1.97×`）。纯 `FP6×FP6` 与 `FP6×FP4` 仍为半速（`1023 FLOP/SM/clk`）；满速 FP4（**`4087.7 FLOP/SM/clk`**）须走 `OMMA.SF.16864`（`mxf4`/`mxf4nvf4`）；INT8 `IMMA` 跑满 **`2031.8 OP/SM/clk`**，INT4 `s4` 则由 `IMMA.S8` 软模拟（`213.7 OP/SM/clk`，仅 `~0.05×`）。同卡 GB205（驱动 `621.01`）上，`N = 8192` FP8→FP32 GEMM（`FAST_ACCUM=0`）从 CUDA 12.8 的 **111.80 TFLOP/s** 跃升至 CUDA 13.5 `cuBLASLt` 的 **241.70 TFLOP/s**。这证实消费卡并未物理阉割 FP32 累加器，半速锁仅挂在传统 `HMMA` 与非缩放 `QMMA` 发射路径上。[GB205 完整 MMA 实测表与工具箱](software/README.cn.md#4-fp8fp32-满速软件路径qmmasf-与-cuda-132) · [核查记录](docs/references.cn.md#5-补充核查记录2026-11-25)
-- **FP16 / BF16 / TF32 → FP32（K 维分块规约折中方案）。** `HMMA` 没有对应的微缩放指令，依然被锁在 `0.5×`。在安装 CUDA 版 PyTorch 的 Windows 或 Linux 上，可沿内积维度 `K` 分块，块内走较快的 FP16 累加路径，块间以 FP32 归约来压低误差。在上述 GB205 上，`N = K = 8192` 时，块大小 2048 的吞吐为 **48.90 TFLOP/s**（比全程 FP32 累加高 **10%**），样本相对 L2 误差为 **0.001644**（比全程 FP16 累加低 **49%**）；块大小降到 1024 时吞吐低于 FP32 基线。建议用自己的矩阵形状同时测吞吐和误差。[软件用法与完整结果](software/README.cn.md)
+- **FP8 / FP6 / 混合 FP8 与 FP4（`QMMA.SF` / `OMMA.SF` / CUDA 13.2+，无损满速）。** 传统 `QMMA` 被锁在 `1024 FLOP/SM/clk`（`0.50×`），但 Blackwell 的块缩放 `QMMA.SF.16832`（单位 UE8M0 缩放 `0x7F7F7F7F`）**只要至少一侧为 8-bit 浮点（`e4m3`、`e5m2` 或 SASS 修补出的未公开 `E3M4FN` 类型码 `2`）即可跑满 `~2045–2048 FLOP/SM/clk`**（`2.00×`、`0 / 33,554,432` 位差异），覆盖 `e4m3`/`e5m2`/`E3M4FN`、混合 `FP8×FP6`/`FP8×FP4`、**纯 `FP6 → E4M3` 无损提升（`2048.1 FLOP/SM/clk`，5 种组合全部 `0` 位差异）**以及 2:4 稀疏 `QMMA.SF.SP`（**`4026.4 FLOP/SM/clk`**，`1.97×`）。满速 FP4（**`4087.7 FLOP/SM/clk`**）须走 `OMMA.SF.16864`（`mxf4`/`mxf4nvf4`），INT8 `IMMA` 跑满 **`2031.8 OP/SM/clk`**。同卡 GB205（驱动 `621.01`）上，`N = 8192` FP8→FP32 GEMM（`FAST_ACCUM=0`）从 CUDA 12.8 的 **111.80 TFLOP/s** 跃升至 CUDA 13.5 `cuBLASLt` 的 **241.70 TFLOP/s**。[GB205 完整 MMA 实测表与工具箱](software/README.cn.md#4-fp8fp32-满速软件路径qmmasf-与-cuda-132) · [路线 2 深度报告](docs/route2-mma-bypass.cn.md)
+- **FP16 / BF16 → FP32（SM 12.0 TMA-WS `Pure B1` / `C1+B1` 与 PyTorch 分块算子）。** SM 12.0 全 4,096 opcode 穷举确认不存在 `HMMA.SF`，限速 MMA（`HMMA.F32`、非缩放 `QMMA`、不含 FP8 的 `QMMA.SF`）共享 16 周期数据通路但受每 SMSP **32 周期硬冷却门（无突发信用）**约束，`1:2`（`HMMA.F32 : HMMA.F16`）混发零惩罚。在 GB205（`4096×14336×4080`，稳态 NVML）上，`128×256×48` TMA + `mbarrier` + `setmaxnreg 40/232` 内核中 `Pure B1 (N=3)` 达 **`80.71 TF/s`（`848.9 FLOP/SM/clk`，同频较 `cuBLAS BF16→FP32` 快 `1.69×`）**，`C1+B1 (N=2)` 达 **`76.62 TF/s`（`797.2 FLOP/SM/clk`，同频 `1.58×`）**（受 140 W 笔记本功耗墙降频影响，墙钟为 `1.33×` / `1.26×`）。在 `Llama-3.2-1B`（**全量 288,768 tokens WikiText-2-raw**、真 FP64 参考）与 `Qwen2.5-1.5B` 替换全部线性层实测：BF16 部署下二者与 `cuBLAS BF16→FP32` 统计不可区分；FP16 部署下绝对超额 KL 仅 `+1.35e-6` / `+6.46e-7`（FP32 `lm_head` 高分辨率口径 `+1.03e-6` / `+4.56e-7`），而无刷新的 `Pure F16` 高达 `+2.90e-4`（差 `23×`–`65×`）。大 `K` 非零均值 GEMM 另有与原生同速但准 **19×–84×** 的 `HMMA.F32 + RN16` 路径；同时保留开箱即用的纯 PyTorch 分块算子（`chunk_k=2048` 时 `48.90 TFLOP/s`、`+10%`、`0.001644` 误差）。[路线 2 深度报告与选型表](docs/route2-mma-bypass.cn.md) · [软件用法与 PyTorch 扫描](software/README.cn.md)
 
 ## 二、前期排雷与已归档工作
 
@@ -192,6 +192,11 @@ blackwell-unlock-research/
 │   ├── index.html                   # 交互式 GPU 算力图（GitHub Pages）
 │   ├── throughput-ceiling.svg       # README 可点击算力预览图（英文）
 │   ├── throughput-ceiling-zh.svg    # README 可点击算力预览图（中文）
+│   ├── route2-kl-floor.svg          # 路线 2 端到端 KL 三层地板分解图（英文）
+│   ├── route2-kl-floor-zh.svg       # 路线 2 端到端 KL 三层地板分解图（中文）
+│   ├── route2-depth-saturation.svg  # 路线 2 逐层离散舍入饱和曲线（英文）
+│   ├── route2-depth-saturation-zh.svg # 路线 2 逐层离散舍入饱和曲线（中文）
+│   ├── route2-mma-bypass.cn.md      # SM 12.0 限速门模型、TMA-WS GEMM 与端到端 LLM 质量实证报告
 │   ├── architecture-map.cn.md       # GB20x 启动链、权限与两条研究路线
 │   ├── abi-fields.cn.md             # 主机侧引导结构体字段表、HAL 绑定与跨驱动版本漂移（公开源码静态阅读）
 │   ├── abi-invariants.cn.md         # Host -> FMC (GSP_FMC_BOOT_PARAMS / GspFwWprMeta) 校验不变量清单

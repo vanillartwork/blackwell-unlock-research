@@ -104,11 +104,21 @@ For **FP8 (E4M3 / E5M2) → FP32** and mixed FP8×FP6 / FP8×FP4 workloads, stoc
 
 ### Route 2 precision toolbox (stock drivers)
 
-| Workload / Precision | Recommended Path | Ideal Rate (`OP/SM/clk`) | Accuracy Trade-Off |
+| Workload / Precision | Recommended Path | Ideal / Measured Rate (`OP/SM/clk`) | Accuracy & Engineering Notes |
 |---|---|---:|---|
 | FP8 (`e4m3`/`e5m2`, per-tensor/channel) | CUDA 13.2+ `cuBLASLt`, or unit-scale `QMMA.SF` (`0x7F`) | `2048` (sparse `4096`) | Bit-identical to plain FP8→FP32; keep tensor/channel scale in epilogue |
+| Pure FP6 (`e3m2`/`e2m3`) or `FP6×FP4` | Lossless `FP6 → E4M3` upcast + `QMMA.SF` (`0x7F`) | **`2048`** (`2.00×`) | `64/64` exact embedding, unchanged `UE8M0`, **`0 / 33,554,432` bit diffs** across all 5 combos |
 | MXFP8 `E3M4FN` (SASS-patched cubin) | Patched `QMMA.SF.16832` (`code = 2`) + UE8M0 | `2048` | +1-bit mantissa over E4M3 (max finite `30.0`, no PTX syntax; requires cubin patching) |
 | Mixed FP8×FP6 / FP8×FP4 (`W6A8` / `W4A8`) | Unit-scale / block-scaled `QMMA.SF` | `2048` | Bit-identical to plain `kind::f8f6f4` |
 | MXFP4 / NVFP4 | `OMMA.SF.16864` (`mxf4` / `mxf4nvf4`) | `4096` | FP4 quantization error only |
-| FP16 / BF16 / TF32 (precision-first) | INT8 `IMMA` multi-slice (Ozaki) | `2048 ÷ products` | Controllable (exact INT32 accumulation); note 2×2 FP8-sliced BF16 needs 4 products (`2048/4 = 512`), offering no speedup over clamped `HMMA` |
-| FP16 / BF16 (speed-first inference) | K-chunked `HMMA.F16` + FP32 reduction (§2 above) | `1024` (less chunk overhead) | Short-segment FP16 rounding error (`~1e-3` at `chunk_k=2048`) |
+| FP16 / BF16 near-Gaussian inference | **TMA-WS Pure `B1` (`N=3` `HMMA.F16` + `HADD2.F32`/`FADD` flush)** | **`790–849`** (`1.63–1.69×` per-GHz vs. `cuBLAS BF16`) | Single-GEMM `rel_L2 ≈ 2.94e-4`; indistinguishable from `cuBLAS BF16→FP32` in BF16 deploy; `+1.35e-6` excess KL (`+10%`) in FP16 deploy |
+| FP16 / BF16 outlier layers (e.g. `down_proj`) | **TMA-WS `C1+B1` (`N=2`, `1:2` F32:F16) + `K`-perm (`rms(X)`)** | **`743–797`** (`1.53–1.58×` per-GHz, `+6.4%` vs. Pure `B1`) | Cuts single-GEMM FP32 `rel_L2` **~6×** (`4.9e-5`), peak FP16 partial sums **20×–137×**, and FP16 LLM excess KL **2.7×–2.9×** |
+| Large-`K` non-zero-mean GEMMs (e.g. `dW`) | **`HMMA.F32` + RN flush every 16 `k16` steps (`RN16`)** | `512` (matches native) | **19×–84×** lower error than `cublasGemmEx` (`19×` with split-K at `K=262k`, `84×` without split-K at `K=65k`) |
+| `lm_head`, MoE routers (FP32-sensitive) | Keep native `HMMA.F32` (or `RN16`) | `512` | Negligible FLOP share; avoids `+2.9e-7` to `+8.4e-7` KL penalty from replacing `lm_head` |
+| FP16 / BF16 quick PyTorch userspace drop-in | K-chunked `HMMA.F16` + FP32 reduction (§2 above) | `591–662` (`chunk_k=2048–4096`) | No custom CUDA kernel needed; `~1.6–2.1e-3` error at `K=8192` |
+
+---
+
+## 5. SM 12.0 Throttle-Gate Model, TMA-WS GEMM & End-to-End LLM Study
+
+A complete empirical study on GB205 covering the 4,096-opcode `HMMA` closure, per-SMSP 32-cycle hard cooldown gate (no burst credit, `1:2` zero-penalty mix default), lossless `FP6 → E4M3` 2× upcast, steady-state NVML clock/power separation of `128×256×48` TMA + `mbarrier` + `setmaxnreg 40/232` kernels (`0 / 2,097,152` bit-exact with the LLM evaluation library), full 288,768-token WikiText-2-raw dual-regime (`FP16`/`FP32` `lm_head`) true-FP64 bootstrap with 95% CIs, BF16 deployment control, and hardware FP16 partial-sum overflow headroom is archived in **[Route 2 Deep Dive](../docs/route2-mma-bypass.md)**.
