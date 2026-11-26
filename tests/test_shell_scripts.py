@@ -229,25 +229,57 @@ class ShellScriptTests(unittest.TestCase):
             self.assertFalse(out.exists())
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "needs Linux sysfs/procfs")
-    def test_archive_excludes_files_this_run_did_not_write(self):
+    def test_refuses_existing_output_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "report"
-            (out / "old").mkdir(parents=True)
-            (out / "previous-raw.log").write_text("raw host data\n", encoding="utf-8")
-            (out / ".hidden").write_text("raw host data\n", encoding="utf-8")
-            (out / "old" / "dump.txt").write_text("raw host data\n", encoding="utf-8")
-            (out / "summary.txt").write_text("stale summary\n", encoding="utf-8")
+            out.mkdir()
+            (out / "summary.txt").write_text("prior cold-boot sample\n", encoding="utf-8")
             proc = run(["collect-report.sh", "--out", str(out), "--tar"])
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("refusing to reuse existing path", proc.stderr.decode())
+            self.assertEqual((out / "summary.txt").read_text(encoding="utf-8"), "prior cold-boot sample\n")
+            self.assertFalse(out.with_suffix(".tar.gz").exists())
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "needs Linux sysfs/procfs")
+    def test_refuses_symlink_output_and_existing_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            victim = Path(tmp) / "outside"
+            victim.mkdir()
+            link = Path(tmp) / "link-report"
+            link.symlink_to(victim)
+            proc = run(["collect-report.sh", "--out", str(link)])
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("refusing to reuse existing path", proc.stderr.decode())
+            self.assertEqual(list(victim.iterdir()), [])
+
+            out = Path(tmp) / "fresh"
+            archive = out.with_suffix(".tar.gz")
+            archive.write_text("existing archive\n", encoding="utf-8")
+            proc = run(["collect-report.sh", "--out", str(out), "--tar"])
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("refusing to overwrite existing archive", proc.stderr.decode())
+            self.assertFalse(out.exists())
+            self.assertEqual(archive.read_text(encoding="utf-8"), "existing archive\n")
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "needs Linux sysfs/procfs")
+    def test_sudo_dmesg_elevates_only_dmesg(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            bin_dir.mkdir()
+            calls = Path(tmp) / "sudo.calls"
+            (bin_dir / "dmesg").write_text("#!/bin/sh\nexit 1\n")
+            (bin_dir / "dmesg").chmod(0o755)
+            (bin_dir / "sudo").write_text(
+                f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{calls}'\n"
+                "echo '[    1.0] NVRM: loading NVIDIA UNIX Open Kernel Module  620.73.04'\n"
+            )
+            (bin_dir / "sudo").chmod(0o755)
+            out = Path(tmp) / "report"
+            env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}")
+            proc = run(["collect-report.sh", "--out", str(out), "--sudo-dmesg"], env=env)
             self.assertEqual(proc.returncode, 0, proc.stderr.decode())
-            with tarfile.open(out.with_suffix(".tar.gz")) as tar:
-                names = sorted(tar.getnames())
-                summary = tar.extractfile("report/summary.txt").read().decode()
-            self.assertEqual(names, [
-                "report/dmesg-gsp-fmc.txt", "report/nvidia-smi.txt",
-                "report/pci-topology.txt", "report/summary.txt",
-            ])
-            self.assertNotIn("stale summary", summary)
-            self.assertIn("3 entry(ies) this run did not write", proc.stderr.decode())
+            self.assertEqual(calls.read_text(encoding="utf-8").splitlines(), ["dmesg"])
+            self.assertIn("620.73.04", (out / "dmesg-gsp-fmc.txt").read_text(encoding="utf-8"))
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "needs Linux sysfs/procfs")
     def test_clean_directory_gives_no_leftover_warning(self):
@@ -281,7 +313,7 @@ NO_RECOVERY = "No confirmed recovery path"
 class RecoveryPathTests(unittest.TestCase):
     """check-env.sh against fabricated machines."""
 
-    def preflight(self, adapters, ssh=False, cmdline="", modules=""):
+    def preflight(self, adapters, ssh=False, cmdline="", modules="", virt_script="echo none; exit 1"):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for n, spec in enumerate(adapters):
@@ -310,16 +342,24 @@ class RecoveryPathTests(unittest.TestCase):
             (proc_dir / "modules").write_text(modules + "\n")
             bin_dir = root / "bin"
             bin_dir.mkdir()
-            for name, body in {
+            stubs = {
                 "systemctl": f"exit {0 if ssh else 3}",
                 "pgrep": "exit 1",
-                "systemd-detect-virt": "echo none; exit 1",
                 "mokutil": "echo 'SecureBoot disabled'",
-            }.items():
+            }
+            if virt_script is not None:
+                stubs["systemd-detect-virt"] = virt_script
+            for name, body in stubs.items():
                 (bin_dir / name).write_text(f"#!/bin/sh\n{body}\n")
                 (bin_dir / name).chmod(0o755)
+            path = f"{bin_dir}:{os.environ['PATH']}" if virt_script is not None else str(bin_dir)
+            if virt_script is None:
+                for tool in ("uname", "grep", "cat", "basename", "readlink", "dirname", "find", "sort", "tr", "od", "zcat", "make", "gcc"):
+                    found = shutil.which(tool)
+                    if found and not (bin_dir / tool).exists():
+                        (bin_dir / tool).symlink_to(found)
             env = dict(
-                os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}",
+                os.environ, PATH=path,
                 BWLAB_SYSFS_ROOT=str(root / "sys"), BWLAB_PROCFS_ROOT=str(proc_dir),
             )
             proc = run(["check-env.sh"], env=env)
@@ -463,6 +503,25 @@ class RecoveryPathTests(unittest.TestCase):
             [NVIDIA], cmdline="console=ttyS0", modules="netconsole 16384 0 - Live 0x0"
         )
         self.assertNotIn(NO_RECOVERY, both)
+
+    def test_virtualization_three_states(self):
+        bare = self.preflight([NVIDIA], ssh=True, virt_script="echo none; exit 1")
+        self.assertIn("VIRT=bare_metal", bare)
+        self.assertIn("zero hard blockers", bare)
+
+        vm = self.preflight([NVIDIA], ssh=True, virt_script="echo kvm; exit 0")
+        self.assertIn("VIRT=virtualized", vm)
+        self.assertIn("[FAIL] Virtualized environment detected (kvm)", vm)
+
+        empty_err = self.preflight([NVIDIA], ssh=True, virt_script="exit 2")
+        self.assertIn("VIRT=unknown", empty_err)
+        self.assertNotIn("Bare-metal Linux host detected", empty_err)
+        self.assertIn("UNVERIFIED", empty_err)
+
+        missing = self.preflight([NVIDIA], ssh=True, virt_script=None)
+        self.assertIn("VIRT=unknown", missing)
+        self.assertNotIn("Bare-metal Linux host detected", missing)
+        self.assertIn("UNVERIFIED", missing)
 
 
 if __name__ == "__main__":

@@ -61,15 +61,15 @@ Route 1 proceeds in two stages, with this repository covering the engineering se
 2. **Interleave to hide cooldown:** Mix throttled and unthrottled MMAs on the same SMSP at a ratio of at most **`1:2`** to fill cooldown gaps at zero gate penalty (`C1+B1`).
 3. **Short-chunk FP16 accumulation with FP32 flush:** Accumulate short tiles in full-rate `HMMA.F16` and flush periodically into FP32 to bound rounding error (`Pure B1` / chunked PyTorch matmul).
 
-All measurements below were collected on the same **GB205 (RTX 5070 Ti Laptop, 140 W TDP, driver `621.01`, CUDA `13.5`)**:
+All measurements below were collected on the same **GB205 (RTX 5070 Ti Laptop, driver `621.01`)** — CUDA `13.5` at the 140 W board TDP for the custom `QMMA.SF` / `OMMA.SF` / TMA-WS rows, and archived PyTorch `2.11.0+cu128` (CUDA `12.8`, ~100 W sustained power cap) for the final pure-PyTorch row:
 
 | Precision & Workload | Recommended Path | Measured Throughput / Speedup | Accuracy & Error |
 | :--- | :--- | :--- | :--- |
 | **FP8 / FP6 / Mixed FP8** | Unit-scale `QMMA.SF` / lossless `FP6 → E4M3` | **~2045–2048 FLOP/SM/clk** (**2.00×**, full rate) | **Bit-exact** (`0` bit diffs) |
 | **FP4 / 2:4 Sparse FP8** | `OMMA.SF` (`mxf4`/`mxf4nvf4`) / `QMMA.SF.SP` | **4087.7** / **4026.4 FLOP/SM/clk** (full rate) | No extra format loss (bit-exact on sparse FP8) |
-| **FP16 / BF16 → FP32** | SM 12.0 TMA-WS `Pure B1` / `C1+B1` | **1.69× / 1.58× per-GHz** (1.33× / 1.26× wall at 140 W) | **Indistinguishable** in BF16 deploy; `+1.35e-6` / `+6.46e-7` excess KL in FP16 |
+| **FP16 / BF16 → FP32** | SM 12.0 TMA-WS `Pure B1` / `C1+B1` | **1.66× / 1.56× per-GHz** (`K=4096`, 1.31× / 1.25× wall at 140 W) | **Indistinguishable** in BF16 deploy; `+1.35e-6` / `+6.46e-7` excess KL in FP16 |
 | **Large-`K` Non-Zero-Mean GEMM** | `HMMA.F32 + RN16` (periodic RN flush) | **1.00×** (matches native rate) | **19×–84× more accurate** than `cuBLAS` |
-| **Zero-Compile Drop-In** | Pure-PyTorch chunked matmul (`chunk_k=2048`) | **48.90 TFLOP/s** (**+10%** at `N=K=8192`) | Sample relative L2 error `0.001644` |
+| **Zero-Compile Drop-In** (`cu128`, ~100 W) | Pure-PyTorch chunked matmul (`chunk_k=2048`) | **48.90 TFLOP/s** (**+10%** at `N=K=8192`) | Sample relative L2 error `0.001644` |
 
 #### 1. FP8 / FP6 / FP4: Lossless Full Rate (`QMMA.SF` / `OMMA.SF`)
 
@@ -84,9 +84,9 @@ All measurements below were collected on the same **GB205 (RTX 5070 Ti Laptop, 1
 #### 2. FP16 / BF16 → FP32: TMA-WS Chunked & Interleaved Kernels
 
 - **Throttle-gate model:** Exhaustive SM 12.0 scanning of all 4,096 12-bit opcodes confirms **no `HMMA.SF` exists**. All throttled MMAs (`HMMA.F32`, unscaled `QMMA`, non-FP8 `QMMA.SF`) share a 16-cycle datapath gated by a hard **32-cycle per-SMSP cooldown gate (no burst credit)**; interleaving at **`1:2`** (`HMMA.F32 : HMMA.F16`) incurs zero gate penalty.
-- **Real GEMM throughput** (`4096×14336×4080`, `128×256×48` TMA + `mbarrier` + `setmaxnreg 40/232`, steady-state NVML):
-  - **`Pure B1 (N=3)`:** **`80.71 TF/s`** (`848.9 FLOP/SM/clk`), **`1.69×`** faster per GHz than `cuBLAS BF16→FP32` (`1.33×` wall-clock under the 140 W laptop TDP cap).
-  - **`C1+B1 (N=2)`:** **`76.62 TF/s`** (`797.2 FLOP/SM/clk`), **`1.58×`** faster per GHz (`1.26×` wall-clock).
+- **Real GEMM throughput** (`4096×14336×4096` exact Llama-3-8B `K=4096` with TMA zero-fill tail, `128×256×48` TMA + `mbarrier` + `setmaxnreg 40/232`, steady-state NVML):
+  - **`Pure B1 (N=3)`:** **`81.13 TF/s`** (`840.8 FLOP/SM/clk`), **`1.66×`** faster per GHz than `cuBLAS BF16→FP32` (`1.31×` wall-clock under the 140 W laptop TDP cap; `1.69×` per-GHz / `1.33×` wall on 48-aligned `K=4080`).
+  - **`C1+B1 (N=2)`:** **`77.08 TF/s`** (`790.5 FLOP/SM/clk`), **`1.56×`** faster per GHz (`1.25×` wall-clock; `1.58×` per-GHz / `1.26×` wall on `K=4080`).
 - **End-to-end LLM quality** (`Llama-3.2-1B` full 288,768-token WikiText-2-raw & `Qwen2.5-1.5B`, every linear layer replaced, true FP64-accum reference):
   - **BF16 deployment:** Both `Pure B1` and `C1+B1` are **statistically indistinguishable** from `cuBLAS BF16→FP32`.
   - **FP16 deployment:** Absolute excess KL vs. native `HMMA.F32` is only **`+1.35e-6`** (`Pure B1`, keeping `lm_head`) and **`+6.46e-7`** (`C1+B1 + K-perm`, all layers), or `+1.03e-6` and `+4.56e-7` under the FP32-`lm_head` high-resolution lens; unflushed `Pure F16` reaches `+2.90e-4` (`23×–65×` worse).
@@ -149,14 +149,14 @@ python3 -B -m unittest discover -s tests -v
 1. Route 1 requires native Linux on a physical host with matching kernel headers and toolchain. WSL2 and virtual machines, including guests with GPU passthrough, are outside this hardware boot procedure.
 2. Open a text console driven by an iGPU or a second, non-NVIDIA GPU. Two NVIDIA cards sharing the driver both lose their output when it unloads. Test SSH from another machine and configure netconsole or a serial console to retain logs if the host hangs.
 3. Check Secure Boot and kernel lockdown. If the kernel enforces module signatures, sign the test module with a key it trusts, such as an enrolled MOK.
-4. Run the following blocks from the repository root. Read the preflight summary and warnings and confirm `FAIL=0` before building.
+4. Run the following blocks from the repository root. Read the preflight summary and warnings, confirm `FAIL=0` and `VIRT=bare_metal` (if `VIRT=unknown`, manually confirm a physical bare-metal Linux host) before building.
 
 > The steps below execute Route 1, Stage 1 (read-only baseline capture). **The pinned `620.73.04` driver version below is provided as a concrete reference example** matching the bundled patch; Route 1 itself is not locked to one driver release. If your machine runs another version, swap in the upstream tag that matches your installed userspace driver and `/lib/firmware/nvidia/<version>/`, and adapt the trace patch per [patches/README.md](patches/README.md) (check layout changes across `610 → 615` with `scripts/abi-layout.py --diff`). The patch logs host-prepared arguments and leaves SPI flash untouched. Load the test module directly from its build directory. A reboot with the normal boot configuration loads the installed driver again. If initialization hangs or FMC reports an error, save the logs and power-cycle the machine before another attempt. [Recovery guide](docs/recovery.md)
 
 **Steps 0–2. Check versions, fetch the source and build.**
 
 ```bash
-# Require FAIL=0 and matching versions for the driver, userspace and GSP firmware.
+# Require FAIL=0, VIRT=bare_metal (or manually verified physical host), and matching driver/userspace/GSP versions.
 bash scripts/check-env.sh
 modinfo -F version nvidia                 # Expect 620.73.04
 ls /lib/firmware/nvidia/620.73.04/        # Expect gsp_*.bin
@@ -187,11 +187,11 @@ for dep in $(modinfo -F depends "$KO" | tr ',' ' '); do sudo modprobe "$dep"; do
 sudo insmod "$KO" && sudo nvidia-smi
 ```
 
-**Step 5. Collect and decode the trace.**
+**Step 5. Collect and decode the trace.** Run as a normal user so only `dmesg` reading is elevated; omit `--out` (or pass a fresh path per run) so cold-boot and reload samples stay separate.
 
 ```bash
-sudo bash scripts/collect-report.sh --out ./my-gb20x-report --tar
-python3 scripts/abi-layout.py --from-log my-gb20x-report/dmesg-gsp-fmc.txt
+bash scripts/collect-report.sh --sudo-dmesg --tar
+python3 scripts/abi-layout.py --from-log ./blackwell-report-<UTC-timestamp>/dmesg-gsp-fmc.txt
 ```
 
 **Step 6. Reload the installed driver or reboot.**
@@ -254,7 +254,8 @@ blackwell-unlock-research/
 ├── software/                        # Route 2 userspace benchmarks and operators
 │   ├── README.md                    # Throughput and accuracy trade-offs
 │   ├── clamp_eval.py                # Steady-state tensor benchmark
-│   └── chunked_fp16_matmul.py       # K-chunked FP16 GEMM with FP32 reduction
+│   ├── chunked_fp16_matmul.py       # K-chunked FP16 GEMM with FP32 reduction
+│   └── verify_wt2_bootstrap.py      # CPU-only verifier for 288k WikiText-2 bootstrap CIs
 ├── reports/
 │   ├── template.md                  # Hardware report template
 │   ├── rom-survey-20261123/         # Metadata from twelve ROMs across five dies

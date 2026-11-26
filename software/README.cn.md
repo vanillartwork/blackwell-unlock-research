@@ -12,6 +12,7 @@
 |---|---|
 | [clamp_eval.py](clamp_eval.py) | 跨平台稳态张量钳制评估器（`fp16_fp16acc` / `fp16_fp32acc` / `bf16_fp32acc` / `tf32_fp32acc` / `fp8_fp32acc` / `int8` / `fp32_control` + `16×16` CPU FP64 相对 L2 误差 + 顺序平衡配对 A/B） |
 | [chunked_fp16_matmul.py](chunked_fp16_matmul.py) | K 维分块 FP16 累加 + FP32 块间归约（提供可导入的 `chunked_fp16_mm` / `chunked_fp16_matmul` 函数及 CLI 帕累托扫描） |
+| [verify_wt2_bootstrap.py](verify_wt2_bootstrap.py) | 纯标准库（无 GPU / 无第三方依赖）复算脚本，可直接从 `reports/gb205-2f18/route2-wt2-288k-fp64.json` 重算均值、ΔPPL、超额 KL、压缩比与 95% 配对 bootstrap 置信区间 |
 
 ---
 
@@ -111,10 +112,10 @@ python3 scripts/verify-baseline.py --clamp-json clamp-local.json --compare repor
 | MXFP8 `E3M4FN`（cubin 修补 SASS） | 修补 `QMMA.SF.16832`（`code = 2`）+ UE8M0 | `2048` | 比 E4M3 多 1-bit 尾数（最大有限值 `30.0`，无 PTX 语法，需原位修补 cubin） |
 | 混合 FP8×FP6 / FP8×FP4（`W6A8` / `W4A8`） | 单位缩放 / 块缩放 `QMMA.SF` | `2048` | 与普通 `kind::f8f6f4` 逐位一致 |
 | MXFP4 / NVFP4 | `OMMA.SF.16864`（`mxf4` / `mxf4nvf4`） | `4096` | 仅有 FP4 量化误差 |
-| FP16 / BF16 近似高斯推理常规层 | **TMA-WS 纯 `B1`（`N=3` `HMMA.F16` + `HADD2.F32`/`FADD` 刷新）** | **`790–849`**（同频较 `cuBLAS BF16` 快 `1.63–1.69×`） | 单 GEMM `rel_L2 ≈ 2.94e-4`；BF16 部署与 `cuBLAS` 统计不可区分；FP16 部署仅 `+1.35e-6` 超额 KL（`+10%`） |
-| FP16 / BF16 强离群通道层（如 `down_proj`） | **TMA-WS `C1+B1`（`N=2`，`1:2` F32:F16）+ `K` 维重排（`rms(X)`）** | **`743–797`**（同频 `1.53–1.58×`，较纯 `B1` 多 `+6.4%`） | 单层 FP32 `rel_L2` 降 **~6×**（`4.9e-5`）、FP16 部分和峰值降 **20×–137×**、FP16 LLM 超额 KL 降 **2.7×–2.9×** |
+| FP16 / BF16 近似高斯推理常规层 | **TMA-WS 纯 `B1`（`N=3` `HMMA.F16` + `HADD2.F32`/`FADD` 刷新）** | **`782–841`**（`K=4096`，同频较 `cuBLAS BF16` 快 `1.61–1.66×`） | 单 GEMM `rel_L2 ≈ 2.94e-4`；BF16 部署与 `cuBLAS` 统计不可区分；FP16 部署仅 `+1.35e-6` 超额 KL（`+10%`） |
+| FP16 / BF16 强离群通道层（如 `down_proj`） | **TMA-WS `C1+B1`（`N=2`，`1:2` F32:F16）+ `K` 维重排（`rms(X)`）** | **`736–791`**（`K=4096`，同频 `1.52–1.56×`，较纯 `B1` 多 `+6.4%`） | 单层 FP32 `rel_L2` 降 **~6×**（`4.9e-5`）、FP16 部分和峰值降 **20×–137×**、FP16 LLM 超额 KL 降 **2.7×–2.9×** |
 | 大 `K` 且激活均值非零（如权重梯度 GEMM） | **`HMMA.F32` + 每 16 步 `k16` 做 RN 刷新（`RN16`）** | `512`（与原生同速） | 较 `cublasGemmEx` 准 **19×–84×**（`K=262k` 触发 split-K 时 `19×`；`K=65k` 未触发 split-K 时 `84×`） |
-| `lm_head`、MoE router 等 FP32 敏感层 | 保留原生 `HMMA.F32`（或 `RN16`） | `512` | 算力占比极低，可避免替换 `lm_head` 带来的 `+2.9e-7` 至 `+8.4e-7` 额外 KL |
+| `lm_head`、MoE router 等 FP32 敏感层 | 保留原生 `HMMA.F32`（或 `RN16`） | `512` | 推理末位 prefill 耗时仅 `0.73%–1.02%`；全序列训练/评测耗时 `6.7%–9.5%`（MAC 占 `15%–21%`），需权衡耗时与 `+2.9e-7` 至 `+9.7e-7` 额外 KL |
 | FP16 / BF16 轻量 PyTorch 现成方案 | K 维分块 `HMMA.F16` + FP32 归约（见第 2 节） | `591–662`（`chunk_k=2048–4096`） | 无需手写 CUDA 内核；`K=8192` 时 `~1.6–2.1e-3` 误差 |
 
 ---

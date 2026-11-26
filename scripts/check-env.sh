@@ -31,17 +31,28 @@ fi
 echo
 
 # 1. Native Linux bare-metal check (WSL / container / VM)
+# Three explicit outcomes: bare_metal (PASS), virtualized (FAIL), unknown (WARN + manual check).
+VIRT_STATE="unknown"
 if grep -qiE "microsoft|wsl" "$PROCFS/version" 2>/dev/null; then
+  VIRT_STATE="virtualized"
   fail "Running inside WSL2: kernel module patching and BAR0 sysfs access are unavailable here (use native Linux bare-metal for Route 1; Route 2 userspace benchmarks still apply)"
 elif command -v systemd-detect-virt >/dev/null 2>&1; then
-  virt="$(systemd-detect-virt 2>/dev/null || true)"
-  if [[ -z "$virt" || "$virt" == "none" ]]; then
+  virt_rc=0
+  virt="$(systemd-detect-virt 2>/dev/null)" || virt_rc=$?
+  virt="$(printf '%s' "$virt" | tr -d '\r\n')"
+  if [[ "$virt" == "none" && "$virt_rc" -eq 1 ]]; then
+    VIRT_STATE="bare_metal"
     ok "Bare-metal Linux host detected (no virtualization layer)"
-  else
+  elif [[ "$virt_rc" -eq 0 && -n "$virt" && "$virt" != "none" ]]; then
+    VIRT_STATE="virtualized"
     fail "Virtualized environment detected (${virt}): Route 1 requires a physical host running native Linux, including when GPU passthrough is available"
+  else
+    VIRT_STATE="unknown"
+    warn "Virtualization state unverified (systemd-detect-virt exited ${virt_rc}, output '${virt:-<empty>}'); manually confirm a physical bare-metal Linux host before Route 1"
   fi
 else
-  warn "Could not verify virtualization state (systemd-detect-virt unavailable)"
+  VIRT_STATE="unknown"
+  warn "Virtualization state unverified (systemd-detect-virt unavailable); manually confirm a physical bare-metal Linux host before Route 1"
 fi
 
 # 2. PCI GPU & independent console
@@ -258,9 +269,13 @@ else
 fi
 
 echo
-echo "=== Summary: PASS=${PASS}  WARN=${WARN}  FAIL=${FAIL} ==="
+echo "=== Summary: PASS=${PASS}  WARN=${WARN}  FAIL=${FAIL}  VIRT=${VIRT_STATE} ==="
 if (( FAIL > 0 )); then
   echo "Verdict: NOT READY for Route 1 (kernel/FMC ABI) on this environment. Hardware baselines and Route 2 benchmarks can run in userspace."
   exit 1
+fi
+if [[ "$VIRT_STATE" != "bare_metal" ]]; then
+  echo "Verdict: Preflight found no hard blockers, but bare-metal host status is UNVERIFIED; manually confirm physical Linux hardware before Route 1."
+  exit 0
 fi
 echo "Verdict: Preflight checks completed with zero hard blockers."

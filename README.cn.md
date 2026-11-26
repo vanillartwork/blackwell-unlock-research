@@ -61,15 +61,15 @@
 2. **混发填满空档**：将限速与不限速 MMA 按不超过 **`1:2`** 的比例交错发射，零惩罚填满冷却空隙（`C1+B1`）；
 3. **短段 FP16 累加 + FP32 刷新**：用满速 `HMMA.F16` 做短段累加，周期性刷新至 FP32 以控制误差（`Pure B1` / PyTorch 分块算子）。
 
-以下数据均实测于同一张 **GB205（RTX 5070 Ti Laptop，140 W，驱动 `621.01`，CUDA `13.5`）**：
+以下数据均实测于同一张 **GB205（RTX 5070 Ti Laptop，驱动 `621.01`）**——其中定制 `QMMA.SF` / `OMMA.SF` / TMA-WS 行运行于 CUDA `13.5`（140 W 整板功耗墙），最后一行纯 PyTorch 分块算子取自归档的 PyTorch `2.11.0+cu128`（CUDA `12.8`，该次稳态约 `100 W` 软功耗墙）：
 
 | 精度与场景 | 推荐方案 | 实测速度 / 加速比 | 精度与误差 |
 | :--- | :--- | :--- | :--- |
 | **FP8 / FP6 / 混合 FP8** | 单位缩放 `QMMA.SF` / FP6 无损升 `E4M3` | **~2045–2048 FLOP/SM/clk**（**2.00×**，满速） | **逐位无损**（`0` 位差异） |
 | **FP4 / 2:4 稀疏 FP8** | `OMMA.SF`（`mxf4`/`mxf4nvf4`）/ `QMMA.SF.SP` | **4087.7** / **4026.4 FLOP/SM/clk**（满速） | 同格式无额外损失（稀疏 FP8 逐位一致） |
-| **FP16 / BF16 → FP32** | SM 12.0 TMA-WS `Pure B1` / `C1+B1` | **同频 1.69× / 1.58×**（140 W 墙钟 1.33× / 1.26×） | BF16 部署**统计不可区分**；FP16 超额 KL 仅 `+1.35e-6` / `+6.46e-7` |
+| **FP16 / BF16 → FP32** | SM 12.0 TMA-WS `Pure B1` / `C1+B1` | **同频 1.66× / 1.56×**（`K=4096`，140 W 墙钟 1.31× / 1.25×） | BF16 部署**统计不可区分**；FP16 超额 KL 仅 `+1.35e-6` / `+6.46e-7` |
 | **大 K 非零均值 GEMM** | `HMMA.F32 + RN16`（周期性就近舍入刷新） | **1.00×**（与原生同速） | 较 `cuBLAS` **准 19×–84×** |
-| **开箱即用（免编译）** | 纯 PyTorch 分块算子（`chunk_k=2048`） | **48.90 TFLOP/s**（**+10%**，`N=K=8192`） | 样本相对 L2 误差 `0.001644` |
+| **开箱即用（免编译，`cu128` ~100 W）** | 纯 PyTorch 分块算子（`chunk_k=2048`） | **48.90 TFLOP/s**（**+10%**，`N=K=8192`） | 样本相对 L2 误差 `0.001644` |
 
 #### 1. FP8 / FP6 / FP4：无损满速（`QMMA.SF` / `OMMA.SF`）
 
@@ -84,9 +84,9 @@
 #### 2. FP16 / BF16 → FP32：TMA-WS 分块与混发内核
 
 - **限速机理**：SM 12.0 全 4,096 opcode 穷举确认**不存在 `HMMA.SF`**。所有限速 MMA（`HMMA.F32`、非缩放 `QMMA`、不含 FP8 的 `QMMA.SF`）共享 16 周期数据通路，但受每 SMSP **32 周期硬冷却门（无突发信用）**约束；按 **`1:2`**（`HMMA.F32 : HMMA.F16`）混发可实现零门控惩罚。
-- **真实 GEMM 吞吐**（`4096×14336×4080`，`128×256×48` TMA + `mbarrier` + `setmaxnreg 40/232`，稳态 NVML）：
-  - **`Pure B1 (N=3)`**：**`80.71 TF/s`**（`848.9 FLOP/SM/clk`），同频较 `cuBLAS BF16→FP32` 快 **`1.69×`**（140 W 笔记本功耗墙降频下墙钟 `1.33×`）。
-  - **`C1+B1 (N=2)`**：**`76.62 TF/s`**（`797.2 FLOP/SM/clk`），同频快 **`1.58×`**（墙钟 `1.26×`）。
+- **真实 GEMM 吞吐**（Llama-3-8B 真实未对齐尺寸 `4096×14336×4096`，TMA 硬件零填充尾块，`128×256×48` TMA + `mbarrier` + `setmaxnreg 40/232`，稳态 NVML）：
+  - **`Pure B1 (N=3)`**：**`81.13 TF/s`**（`840.8 FLOP/SM/clk`），同频较 `cuBLAS BF16→FP32` 快 **`1.66×`**（140 W 功耗墙下墙钟 `1.31×`；48 对齐 `K=4080` 为同频 `1.69×` / 墙钟 `1.33×`）。
+  - **`C1+B1 (N=2)`**：**`77.08 TF/s`**（`790.5 FLOP/SM/clk`），同频快 **`1.56×`**（墙钟 `1.25×`；`K=4080` 为同频 `1.58×` / 墙钟 `1.26×`）。
 - **端到端 LLM 质量**（`Llama-3.2-1B` 全量 288,768 tokens WikiText-2-raw 与 `Qwen2.5-1.5B`，替换全部线性层，真 FP64 累加参考）：
   - **BF16 部署**：`Pure B1` 与 `C1+B1` 均与 `cuBLAS BF16→FP32` **统计不可区分**。
   - **FP16 部署**：`Pure B1`（保留 `lm_head`）与 `C1+B1 + K 维重排` 相对原生 `HMMA.F32` 的绝对超额 KL 分别仅 **`+1.35e-6`** 与 **`+6.46e-7`**（FP32 `lm_head` 高分辨率口径下为 `+1.03e-6` 与 `+4.56e-7`）；作为对比，无刷新的 `Pure F16` 高达 `+2.90e-4`（差 `23×–65×`）。
@@ -149,14 +149,14 @@ python3 -B -m unittest discover -s tests -v
 1. 路线 1 仅适用于原生 Linux 裸机，内核头文件和工具链须与运行内核匹配。WSL2 和虚拟机（包括 GPU 直通）均不适用于此实机引导流程。
 2. 在核显或非 NVIDIA 副卡上实际打开文本终端。两张 NVIDIA 卡若共用同一驱动，卸载后会同时失去输出。从另一台机器测试 SSH，并配置 netconsole 或串口，以便本机挂起时仍能保存日志。
 3. 核对 Secure Boot 和内核 Lockdown 状态。若内核强制验证签名，测试模块需由内核信任的密钥签名，例如已登记的 MOK。
-4. 在仓库根目录逐段执行下列命令。先检查预检汇总和警告，确认 `FAIL=0`，再继续编译。
+4. 在仓库根目录逐段执行下列命令。先检查预检汇总和警告，确认 `FAIL=0` 且 `VIRT=bare_metal`（若显示 `VIRT=unknown`，须先人工核实为原生 Linux 物理机），再继续编译。
 
 > 以下流程对应路线 1 第一步（只读基线采集）。**下文限定的 `620.73.04` 仅作为固定参考示例**（与随仓库提供的示例补丁对应）；路线 1 工具本身不绑定单一驱动版本。若本机运行其他版本，请按实际需要替换为与本机用户态驱动及 `/lib/firmware/nvidia/<版本>/` 一致的上游 tag，并参照 [补丁说明](patches/README.cn.md) 适配观测点（610 与 615 之间结构体布局有变动，可用 `scripts/abi-layout.py --diff` 核对）。补丁只记录驱动准备的参数，不写 SPI 闪存。测试模块从构建目录临时加载；使用常规启动配置重启后，系统会重新加载已安装的驱动。出现挂起或 FMC 报错时，先保存日志，完全断电冷启动后再继续。[故障恢复指南](docs/recovery.cn.md)
 
 **第 0–2 步：核对版本、取源码、编译**（不影响正在运行的驱动）
 
 ```bash
-# 0. 预检须为 FAIL=0；已装驱动须与补丁 tag 完全一致（用户态与 GSP 固件都要匹配）
+# 0. 预检须为 FAIL=0 且 VIRT=bare_metal（若 VIRT=unknown 须人工确认物理机）；已装驱动须与补丁 tag 完全一致
 bash scripts/check-env.sh
 modinfo -F version nvidia                 # 须为 620.73.04
 ls /lib/firmware/nvidia/620.73.04/        # 须有 gsp_*.bin
@@ -187,11 +187,11 @@ for dep in $(modinfo -F depends "$KO" | tr ',' ' '); do sudo modprobe "$dep"; do
 sudo insmod "$KO" && sudo nvidia-smi
 ```
 
-**第 5 步：采集并解码**
+**第 5 步：采集并解码**（以普通用户运行，仅对读取 `dmesg` 提权；默认按 UTC 时间戳创建独占新目录，避免覆盖冷启动与重载对照样本）
 
 ```bash
-sudo bash scripts/collect-report.sh --out ./my-gb20x-report --tar
-python3 scripts/abi-layout.py --from-log my-gb20x-report/dmesg-gsp-fmc.txt
+bash scripts/collect-report.sh --sudo-dmesg --tar
+python3 scripts/abi-layout.py --from-log ./blackwell-report-<UTC-timestamp>/dmesg-gsp-fmc.txt
 ```
 
 **第 6 步：回滚**（或直接重启）
@@ -254,7 +254,8 @@ blackwell-unlock-research/
 ├── software/                        # 路线 2：用户态算子与基准
 │   ├── README.cn.md                 # 分块算子的用法、吞吐与精度
 │   ├── clamp_eval.py                # 跨平台（Linux/Windows）稳态张量钳制与误差评估脚本
-│   └── chunked_fp16_matmul.py       # K 维分块 FP16 累加 + FP32 块间归约（缓解 L2 误差放大）
+│   ├── chunked_fp16_matmul.py       # K 维分块 FP16 累加 + FP32 块间归约（缓解 L2 误差放大）
+│   └── verify_wt2_bootstrap.py      # 无 GPU 复算 288k WikiText-2 逐段配对 bootstrap 置信区间
 ├── reports/
 │   ├── template.cn.md               # 社区真机观测报告标准模板
 │   ├── rom-survey-20261123/         # 十二份 ROM（GB202 ×3 / GB203 ×3 / GB205 ×3 / GB206 ×2 / GB207）的跨核心元数据

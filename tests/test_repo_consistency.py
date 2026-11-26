@@ -10,6 +10,7 @@ import subprocess
 import sys
 import unittest
 from urllib.parse import unquote
+import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -185,6 +186,14 @@ class MarkdownLinkTests(unittest.TestCase):
                 self.assertIn(tags[tag]["commit"], readme)
                 self.assertIn(f"patches/{patch.name}", readme)
 
+    def test_all_svgs_parse_as_valid_xml(self):
+        svgs = [p for p in repo_files() if p.suffix.lower() == ".svg"]
+        self.assertTrue(svgs)
+        for p in svgs:
+            with self.subTest(path=str(p.relative_to(ROOT))):
+                root = ET.fromstring(p.read_text(encoding="utf-8"))
+                self.assertTrue(root.tag.endswith("svg"))
+
 
 @unittest.skipUnless(hasattr(sys, "stdlib_module_names"), "needs Python 3.10+")
 class DependencyTests(unittest.TestCase):
@@ -239,6 +248,33 @@ class ArchivedJsonTests(unittest.TestCase):
             with self.subTest(label=r["label"]):
                 for key in ("speedup_vs_fp32acc", "error_ratio_vs_fp32acc", "error_reduction_vs_full_fp16acc"):
                     self.assertAlmostEqual(r[key], f[key], places=9)
+
+    def test_route2_wt2_bootstrap_archive_matches_report(self):
+        data = json.loads((GB205 / "route2-wt2-288k-fp64.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["schema"], "blackwell-abi-lab/route2-wt2-bootstrap/1")
+        mod = load("software/verify_wt2_bootstrap.py")
+        summary = mod.compute_summary(data)
+        self.assertEqual(summary["n_chunks"], 282)
+        self.assertEqual(summary["total_tokens"], 288768)
+        doc = read("docs/route2-mma-bypass.md")
+        self.assertIn(f"PPL_hi = {summary['ref_ppl_high_res']:.5f}", doc)
+        self.assertIn(f"PPL_dep = {summary['ref_ppl_deploy']:.5f}", doc)
+        comp_hi = summary["compression_pure_b1_all_over_c1b1_kp_all"]["high_res"]
+        comp_dep = summary["compression_pure_b1_all_over_c1b1_kp_all"]["deploy"]
+        self.assertIn(f"{comp_hi[0]:.2f}×", doc)
+        self.assertIn(f"{comp_dep[0]:.2f}×", doc)
+        _, body = table_after(doc, "### 3.2 Full WikiText-2-raw")
+        self.assertEqual(len(body), len(summary["rows"]))
+        for row, r in zip(body, summary["rows"]):
+            with self.subTest(key=r["key"]):
+                dep_nums = [float(x) for x in re.findall(r"[+-]?\d+\.\d+e[+-]\d+", plain(row[1]))]
+                hi_nums = [float(x) for x in re.findall(r"[+-]?\d+\.\d+e[+-]\d+", plain(row[2]))]
+                self.assertAlmostEqual(dep_nums[0], r["kl_deploy"], delta=max(r["kl_deploy"] * 0.01, 1e-7))
+                self.assertAlmostEqual(hi_nums[0], r["kl_high_res"], delta=max(r["kl_high_res"] * 0.01, 1e-7))
+                if r["key"] != data["protocol"]["baseline_key"]:
+                    self.assertAlmostEqual(dep_nums[1], r["excess_deploy"][0], delta=max(abs(r["excess_deploy"][0]) * 0.01, 5e-9))
+                    self.assertAlmostEqual(hi_nums[1], r["excess_high_res"][0], delta=max(abs(r["excess_high_res"][0]) * 0.01, 5e-9))
+                self.assertAlmostEqual(first_number(row[3]), r["top1_high_res"], delta=0.011)
 
 
 class ReportTableTests(unittest.TestCase):

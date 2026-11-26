@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="780" height="446" viewBox="0 0 780 446" role="img" aria-label="端到端 KL 误差三层加法分解（FP16 vs BF16 部署）">
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="452" viewBox="0 0 780 452" role="img" aria-label="端到端 KL 双口径拆解 · 高分辨率骨干地板 + 双口径输出差额 + 方法超额">
 <style>
   text{font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
   .mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace}
   .card{fill:#ffffff;stroke:#c9d5d1;stroke-width:1}
   .mast{fill:#102f35}
   .mast-accent{fill:#8ad8ac}
-  .mast-title{fill:#f0f9f4;font-size:15px;font-weight:700}
-  .mast-sub{fill:#bfd1ce;font-size:10.8px}
+  .mast-title{fill:#f0f9f4;font-size:14.5px;font-weight:700}
+  .mast-sub{fill:#bfd1ce;font-size:10.5px}
   .fg{fill:#162b30}
   .mut{fill:#485f62}
   .ex-txt{fill:#c84b18}
@@ -30,19 +30,19 @@
     .brk{stroke:#0d1417}
   }
 </style>
-<rect class="card" x="0.5" y="0.5" width="779" height="445" rx="8"/>
+<rect class="card" x="0.5" y="0.5" width="779" height="451" rx="8"/>
 <path class="mast" d="M8,1 H772 Q779,1 779,8 V62 H1 V8 Q1,1 8,1 Z"/>
 <rect class="mast-accent" x="1" y="62" width="778" height="3"/>
-<text class="mast-title" x="22" y="29">端到端 KL 误差三层加法分解（FP16 vs BF16 部署）</text>
-<text class="mast-sub" x="22" y="49">Llama-3.2-1B：FP16 组为全量 288k 真 FP64 参考；BF16 组约放大 ~64×（在误差范围内等于 (2³)²）；横跨两种格式均呈 ~35% 骨干 / ~65% lm_head 拆分</text>
+<text class="mast-title" x="22" y="29">端到端 KL 双口径拆解 · 高分辨率骨干地板 + 双口径输出差额 + 方法超额</text>
+<text class="mast-sub" x="22" y="49">Llama-3.2-1B：FP16 为 288k 真 FP64 参考，BF16 约放大 ~64×；固定 FP32 参考 2×2 消融另测得单侧 lm_head 独立占 ~53%</text>
 
 <!-- Legend -->
-<rect class="b-bb" x="22" y="79" width="14" height="10" rx="2"/>
-<text class="fg" x="42" y="88" font-size="11">骨干离散舍入饱和地板 (~35%)</text>
-<rect class="b-lm" x="280" y="79" width="14" height="10" rx="2"/>
-<text class="fg" x="300" y="88" font-size="11">lm_head 末层输出量化地板 (~65%)</text>
-<rect class="b-ex" x="546" y="79" width="14" height="10" rx="2"/>
-<text class="fg" x="566" y="88" font-size="11">方法自身绝对超额 KL</text>
+<rect class="b-bb" x="22" y="79" width="13" height="10" rx="2"/>
+<text class="fg" x="40" y="88" font-size="10.5">高分辨率骨干地板 (FP32 lm_head, ~35%)</text>
+<rect class="b-lm" x="308" y="79" width="13" height="10" rx="2"/>
+<text class="fg" x="326" y="88" font-size="10.5">双口径差额 (Deploy − High-Res, ~65%)</text>
+<rect class="b-ex" x="580" y="79" width="13" height="10" rx="2"/>
+<text class="fg" x="598" y="88" font-size="10.5">方法超额 KL (相对 Mode0)</text>
 
 <!-- Panel titles -->
 <text class="fg" x="236" y="122" font-size="11.5" font-weight="600" text-anchor="middle">FP16 骨干（288k 真 FP64，单位 10⁻⁶ KL）</text>
@@ -135,6 +135,7 @@
 <text class="mut" x="720.8" y="370" font-size="9" text-anchor="middle">(no fl)</text>
 
 <!-- Footnote -->
-<text class="mut" x="22" y="410" font-size="10.2">注：右侧 BF16 坐标轴刻度（10⁻⁴）约为左侧 FP16（10⁻⁶）的 64 倍。不加刷新的 Pure F16 在 FP16 下高达 303×10⁻⁶（超出左轴 15×，截断标注），在 BF16 下达 12.6×10⁻⁴。</text>
-<text class="mut mono" x="22" y="428" font-size="9.8">FP16: 4.59e-6 (35.0%) + 8.50e-6 (65.0%) = 13.09e-6  |  BF16: 2.86e-4 (34.6%) + 5.40e-4 (65.4%) = 8.26e-4  |  BF16/FP16 ratio: ~63.1x (both floors ~64x)</text>
+<text class="mut" x="22" y="408" font-size="10.2">注：双口径差额（Deploy − High-Res）同时量化了参考与被测末层 logits；固定 FP32 参考 2×2 消融（32k）见正文 §3.1：</text>
+<text class="mut mono" x="22" y="426" font-size="9.5">FP16: bb 4.64e-6 (47.8%) + single-side lm_head 5.11e-6 (52.6%) = 9.70e-6  |  BF16: bb 2.94e-4 (47.6%) + lm_head 3.27e-4 (52.9%) = 6.17e-4 (64.0x)</text>
+<text class="mut" x="22" y="442" font-size="9.6">双口径差额：FP16 4.59e-6 + 8.50e-6 = 13.09e-6 | BF16 2.86e-4 + 5.40e-4 = 8.26e-4（Pure F16 达 303e-6 / 12.6e-4）</text>
 </svg>

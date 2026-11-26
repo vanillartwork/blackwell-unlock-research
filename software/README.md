@@ -12,6 +12,7 @@ Measure steady-state throughput and relative L2 error on a Blackwell GPU, then c
 |---|---|
 | [clamp_eval.py](clamp_eval.py) | Compare FP16, BF16, TF32 and FP8 with FP32 accumulation against FP16-accumulate, INT8 and FP32 controls. The benchmark uses a 16 × 16 CPU FP64 reference sample and an order-balanced FP16 A/B comparison. |
 | [chunked_fp16_matmul.py](chunked_fp16_matmul.py) | Import `chunked_fp16_mm` for two matrices or `chunked_fp16_matmul` for batched inputs. The CLI sweeps K chunk sizes and measures throughput and error. |
+| [verify_wt2_bootstrap.py](verify_wt2_bootstrap.py) | Pure-stdlib (no GPU / no third-party dependencies) verifier that recomputes means, ΔPPL, excess KL, compression ratios and 95% paired bootstrap CIs from `reports/gb205-2f18/route2-wt2-288k-fp64.json`. |
 
 ---
 
@@ -111,10 +112,10 @@ For **FP8 (E4M3 / E5M2) → FP32** and mixed FP8×FP6 / FP8×FP4 workloads, stoc
 | MXFP8 `E3M4FN` (SASS-patched cubin) | Patched `QMMA.SF.16832` (`code = 2`) + UE8M0 | `2048` | +1-bit mantissa over E4M3 (max finite `30.0`, no PTX syntax; requires cubin patching) |
 | Mixed FP8×FP6 / FP8×FP4 (`W6A8` / `W4A8`) | Unit-scale / block-scaled `QMMA.SF` | `2048` | Bit-identical to plain `kind::f8f6f4` |
 | MXFP4 / NVFP4 | `OMMA.SF.16864` (`mxf4` / `mxf4nvf4`) | `4096` | FP4 quantization error only |
-| FP16 / BF16 near-Gaussian inference | **TMA-WS Pure `B1` (`N=3` `HMMA.F16` + `HADD2.F32`/`FADD` flush)** | **`790–849`** (`1.63–1.69×` per-GHz vs. `cuBLAS BF16`) | Single-GEMM `rel_L2 ≈ 2.94e-4`; indistinguishable from `cuBLAS BF16→FP32` in BF16 deploy; `+1.35e-6` excess KL (`+10%`) in FP16 deploy |
-| FP16 / BF16 outlier layers (e.g. `down_proj`) | **TMA-WS `C1+B1` (`N=2`, `1:2` F32:F16) + `K`-perm (`rms(X)`)** | **`743–797`** (`1.53–1.58×` per-GHz, `+6.4%` vs. Pure `B1`) | Cuts single-GEMM FP32 `rel_L2` **~6×** (`4.9e-5`), peak FP16 partial sums **20×–137×**, and FP16 LLM excess KL **2.7×–2.9×** |
+| FP16 / BF16 near-Gaussian inference | **TMA-WS Pure `B1` (`N=3` `HMMA.F16` + `HADD2.F32`/`FADD` flush)** | **`782–841`** (`K=4096`, `1.61–1.66×` per-GHz vs. `cuBLAS BF16`) | Single-GEMM `rel_L2 ≈ 2.94e-4`; indistinguishable from `cuBLAS BF16→FP32` in BF16 deploy; `+1.35e-6` excess KL (`+10%`) in FP16 deploy |
+| FP16 / BF16 outlier layers (e.g. `down_proj`) | **TMA-WS `C1+B1` (`N=2`, `1:2` F32:F16) + `K`-perm (`rms(X)`)** | **`736–791`** (`K=4096`, `1.52–1.56×` per-GHz, `+6.4%` vs. Pure `B1`) | Cuts single-GEMM FP32 `rel_L2` **~6×** (`4.9e-5`), peak FP16 partial sums **20×–137×**, and FP16 LLM excess KL **2.7×–2.9×** |
 | Large-`K` non-zero-mean GEMMs (e.g. `dW`) | **`HMMA.F32` + RN flush every 16 `k16` steps (`RN16`)** | `512` (matches native) | **19×–84×** lower error than `cublasGemmEx` (`19×` with split-K at `K=262k`, `84×` without split-K at `K=65k`) |
-| `lm_head`, MoE routers (FP32-sensitive) | Keep native `HMMA.F32` (or `RN16`) | `512` | Negligible FLOP share; avoids `+2.9e-7` to `+8.4e-7` KL penalty from replacing `lm_head` |
+| `lm_head`, MoE routers (FP32-sensitive) | Keep native `HMMA.F32` (or `RN16`) | `512` | `< 1.0%` wall time in last-token inference prefill (`0.73%–1.02%` on 1B–1.5B); in full-seq training/eval (`6.7%–9.5%` wall / `15%–21%` MACs) weigh cost vs. `+2.9e-7` to `+9.7e-7` KL penalty |
 | FP16 / BF16 quick PyTorch userspace drop-in | K-chunked `HMMA.F16` + FP32 reduction (§2 above) | `591–662` (`chunk_k=2048–4096`) | No custom CUDA kernel needed; `~1.6–2.1e-3` error at `K=8192` |
 
 ---

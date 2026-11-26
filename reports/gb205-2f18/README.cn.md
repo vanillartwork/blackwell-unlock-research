@@ -71,3 +71,4 @@
 - [`clamp-eval-621.01-n8192.json`](clamp-eval-621.01-n8192.json) — 稳态张量基准 (`N=8192`)
 - [`clamp-eval-621.01-n4096.json`](clamp-eval-621.01-n4096.json) — 稳态张量基准 (`N=4096`)
 - [`chunked-fp16-621.01.json`](chunked-fp16-621.01.json) — 路线 2 的分块 FP16 累加扫描 (`N=8192`)
+- [`route2-wt2-288k-fp64.json`](route2-wt2-288k-fp64.json) — `unsloth/Llama-3.2-1B` 在全量 WikiText-2-raw（282 × 1,024 = 288,768 tokens）上相对真 FP64 的逐段 KL / Top-1 / NLL 原始数据（可用 [`../../software/verify_wt2_bootstrap.py`](../../software/verify_wt2_bootstrap.py) 在无 GPU 环境下独立复算）

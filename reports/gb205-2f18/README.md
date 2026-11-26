@@ -71,3 +71,4 @@ At `N=8192`, chunks of 2048 and 4096 improved throughput by 10% and 27% over the
 - [`clamp-eval-621.01-n8192.json`](clamp-eval-621.01-n8192.json) — Steady-state clamp evaluation (`N=8192`)
 - [`clamp-eval-621.01-n4096.json`](clamp-eval-621.01-n4096.json) — Steady-state clamp evaluation (`N=4096`)
 - [`chunked-fp16-621.01.json`](chunked-fp16-621.01.json) — Route 2 K-chunked FP16-acc Pareto sweep (`N=8192`)
+- [`route2-wt2-288k-fp64.json`](route2-wt2-288k-fp64.json) — Per-chunk (282 × 1,024 = 288,768 tokens) WikiText-2-raw KL, Top-1 and NLL records vs. true FP64 on `unsloth/Llama-3.2-1B` (reproducible on CPU via [`../../software/verify_wt2_bootstrap.py`](../../software/verify_wt2_bootstrap.py))

@@ -8,21 +8,25 @@ set -euo pipefail
 
 OUT_DIR=""
 MAKE_TAR=0
+SUDO_DMESG=0
 # Everything this script writes. The archive is built from this list, never from the
 # directory, so files left there by an earlier run or by hand cannot leak into it.
 REPORT_FILES=(summary.txt nvidia-smi.txt pci-topology.txt dmesg-gsp-fmc.txt)
 
 usage() {
   cat <<'EOF'
-Usage: collect-report.sh [--out <dir>] [--tar]
+Usage: collect-report.sh [--out <dir>] [--tar] [--sudo-dmesg]
        collect-report.sh --sanitize < raw.log > clean.log
 
 Read-only collector for Blackwell ABI & cross-die observation reports.
-  --out <dir>   Output directory (default: ./blackwell-report-<UTC-timestamp>)
-  --tar         Also create a <dir>.tar.gz archive of the four files written here
-  --sanitize    Only filter stdin to stdout with the same redaction rules
-                (for netconsole/serial logs captured on another machine)
-  -h, --help    Show this message
+Run as an unprivileged user; it creates an exclusive new output directory and
+refuses to reuse existing paths or overwrite existing archives.
+  --out <dir>    New output directory (default: ./blackwell-report-<UTC-timestamp>)
+  --tar          Also create a new <dir>.tar.gz archive of the four files written here
+  --sudo-dmesg   Use sudo only to read dmesg if unprivileged dmesg is restricted
+  --sanitize     Only filter stdin to stdout with the same redaction rules
+                 (for netconsole/serial logs captured on another machine)
+  -h, --help     Show this message
 EOF
 }
 
@@ -132,6 +136,10 @@ while [[ $# -gt 0 ]]; do
       MAKE_TAR=1
       shift
       ;;
+    --sudo-dmesg)
+      SUDO_DMESG=1
+      shift
+      ;;
     --sanitize)
       sanitize_stream
       exit 0
@@ -152,7 +160,36 @@ TS_UTC="$(date -u +%Y%m%dT%H%M%SZ)"
 if [[ -z "$OUT_DIR" ]]; then
   OUT_DIR="./blackwell-report-${TS_UTC}"
 fi
-mkdir -p "$OUT_DIR"
+# Strip trailing slashes while preserving "/" so basename/tar checks are consistent.
+while [[ "$OUT_DIR" != "/" && "$OUT_DIR" == */ ]]; do
+  OUT_DIR="${OUT_DIR%/}"
+done
+if [[ -z "$OUT_DIR" || "$OUT_DIR" == "/" || "$OUT_DIR" == "." || "$OUT_DIR" == ".." ]]; then
+  echo "collect-report: --out must name a new subdirectory, not '${OUT_DIR}'" >&2
+  exit 2
+fi
+if [[ -e "$OUT_DIR" || -L "$OUT_DIR" ]]; then
+  echo "collect-report: refusing to reuse existing path '${OUT_DIR}'; choose a new directory name to avoid overwriting prior samples or following symlinks" >&2
+  exit 2
+fi
+parent_dir="$(dirname -- "$OUT_DIR")"
+if [[ ! -d "$parent_dir" ]]; then
+  echo "collect-report: parent directory '${parent_dir}' does not exist" >&2
+  exit 2
+fi
+abs_parent="$(cd -- "$parent_dir" && pwd -P)"
+base_name="$(basename -- "$OUT_DIR")"
+tar_path="${abs_parent}/${base_name}.tar.gz"
+if (( MAKE_TAR == 1 )) && [[ -e "$tar_path" || -L "$tar_path" ]]; then
+  echo "collect-report: refusing to overwrite existing archive '${tar_path}'" >&2
+  exit 2
+fi
+if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+  echo "NOTE: Running as root is unnecessary; prefer running as a normal user with --sudo-dmesg so only dmesg reading is elevated."
+fi
+# Atomic exclusive creation guarantees no pre-existing files or symlinks inside OUT_DIR.
+mkdir -- "$OUT_DIR"
+set -o noclobber
 
 # 1. System & driver summary
 {
@@ -213,27 +250,36 @@ fi
 } >"${OUT_DIR}/pci-topology.txt"
 
 # 4. Filtered GSP / FMC / NVRM kernel messages
+dmesg_ok=0
 if dmesg_out="$(dmesg 2>/dev/null)"; then
-  grep -iE 'NVRM|nvidia|gsp|fmc|wpr2?|fwsec|nova|nouveau' <<<"$dmesg_out" \
-    | sanitize_stream >"${OUT_DIR}/dmesg-gsp-fmc.txt" || true
-  if [[ ! -s "${OUT_DIR}/dmesg-gsp-fmc.txt" ]]; then
+  dmesg_ok=1
+elif (( SUDO_DMESG == 1 )) && command -v sudo >/dev/null 2>&1 && dmesg_out="$(sudo dmesg 2>/dev/null)"; then
+  dmesg_ok=1
+fi
+if (( dmesg_ok == 1 )); then
+  filtered_dmesg="$(grep -iE 'NVRM|nvidia|gsp|fmc|wpr2?|fwsec|nova|nouveau' <<<"$dmesg_out" | sanitize_stream || true)"
+  if [[ -n "$filtered_dmesg" ]]; then
+    printf '%s\n' "$filtered_dmesg" >"${OUT_DIR}/dmesg-gsp-fmc.txt"
+  else
     echo "(dmesg readable, but no NVIDIA/GSP/FMC lines matched)" >"${OUT_DIR}/dmesg-gsp-fmc.txt"
   fi
 else
-  echo "(dmesg unreadable without root/CAP_SYSLOG; re-run with sudo if GSP/FMC kernel logs are needed)" >"${OUT_DIR}/dmesg-gsp-fmc.txt"
+  echo "(dmesg unreadable without CAP_SYSLOG; re-run as a normal user with --sudo-dmesg if GSP/FMC kernel logs are needed)" >"${OUT_DIR}/dmesg-gsp-fmc.txt"
 fi
 
 echo "Wrote sanitized read-only report to: ${OUT_DIR}"
 ls -la "$OUT_DIR"
 
 if (( MAKE_TAR == 1 )); then
-  abs_dir="$(cd "$OUT_DIR" && pwd)"
-  tar_path="${abs_dir}.tar.gz"
+  if [[ -e "$tar_path" || -L "$tar_path" ]]; then
+    echo "collect-report: refusing to overwrite existing archive '${tar_path}'" >&2
+    exit 2
+  fi
   members=()
   for f in "${REPORT_FILES[@]}"; do
-    members+=("$(basename "$abs_dir")/${f}")
+    members+=("${base_name}/${f}")
   done
-  tar -czf "$tar_path" -C "$(dirname "$abs_dir")" -- "${members[@]}"
+  tar -cz -C "$abs_parent" -- "${members[@]}" >"$tar_path"
   echo "Created archive: ${tar_path} (${#members[@]} files)"
 fi
 
