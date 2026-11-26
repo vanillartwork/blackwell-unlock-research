@@ -87,6 +87,8 @@ For **FP8 (E4M3 / E5M2) → FP32** and mixed FP8×FP6 / FP8×FP4 workloads, stoc
 | FP8 `e4m3×e4m3` plain vs **`QMMA.SF`** | `QMMA` → **`QMMA.SF.16832...E8`** | `1022.4` → **`2045.3`** | 115.67 → **226.34** | **`2.00×`**, `0 / 33,554,432` bit diffs |
 | FP8 `e5m2×e5m2` plain vs **`QMMA.SF`** | `QMMA` → **`QMMA.SF.16832...E8`** | `1022.4` → **`2045.3`** | 113.67 → **225.21** | **`2.00×`**, `0 / 33,554,432` bit diffs |
 | FP8 `e4m3×e5m2` plain vs **`QMMA.SF`** | `QMMA` → **`QMMA.SF.16832...E8`** | `1022.4` → **`2045.3`** | 115.42 → **222.27** | **`2.00×`**, `0 / 33,554,432` bit diffs |
+| Undoc. **`E3M4FN×E3M4FN`** (`code 2×2`) | Patched `QMMA.SF.16832` (`hi64` split) | **`2045.2`** | **227.05** | **`2.00×`**, 4-bit mantissa verified (`0x31 → 36.125`) |
+| Mixed **`E4M3×E3M4FN`** (`code 0×2`) | Patched `QMMA.SF.16832` (`hi64` split) | **`2045.2`** | **225.92** | **`2.00×`**, exact (`0x31 → 19.125`) |
 | Mixed `e4m3×e3m2` / `e3m2×e4m3` **`QMMA.SF`** | **`QMMA.SF.16832...E8`** | **`2045.5`** | **225.68 / 225.03** | **`2.00×`** (FP8 operand present) |
 | Mixed `e4m3×e2m1` / `e2m1×e4m3` / `e5m2×e2m1` **`QMMA.SF`** | **`QMMA.SF.16832...E8`** | **`2044.3–2044.9`** | **225.22–227.77** | **`2.00×`**, `0 / 33,554,432` bit diffs (`e4m3×e2m1`) |
 | FP6 `e3m2×e3m2` / `e2m3×e2m3` plain vs `QMMA.SF` | `QMMA` / `QMMA.SF.16832...E8` | `1022.5` vs **`1023.1`** | 115.92 vs 115.79 | **Remains half-rate** (no FP8 operand) |
@@ -98,13 +100,14 @@ For **FP8 (E4M3 / E5M2) → FP32** and mixed FP8×FP6 / FP8×FP4 workloads, stoc
 | INT4 `s4×s4→s32` (`k64`) | Emulated via `IMMA.16832.S8.S8` | `213.7` | 24.27 | `~0.05×` of 4096; no native INT4 MMA on SM 12.0 |
 
   - **Precision & `cuBLASLt` check (same GB205, driver `621.01`).** `QMMA.SF` passed exact FP32 accumulation on `256² + 0.125² = 65536.015625` (`0x47800002`), and negative controls with UE8M0 scale `2.0` (`0x80`) differed in `~33.55M / 33.55M` registers. At `N=8192` FP8→FP32 GEMM, CUDA 13.5 `cuBLASLt 131000` reached **`241.70 TFLOP/s`** (`FAST_ACCUM=0`, `4.55 ms/iter`) and **`239.93 TFLOP/s`** (`FAST_ACCUM=1`, `4.58 ms/iter`), up **`2.16×`** over the archived PyTorch `2.11.0+cu128` (CUDA 12.8) baseline (`111.80 TFLOP/s`, `0.50×`).
-  - **Unverified format.** `E3M4` is not exposed in standard PTX (`nvcc 13.5`) and would require undocumented SASS patching; it was not tested here.
+  - **Undocumented `E3M4FN` (SASS type code `2`, hardware-verified on GB205).** Cross-diffing all five documented `QMMA.SF.16832` types (`e4m3`/`e5m2`/`e3m2`/`e2m3`/`e2m1`) in `nvdisasm -hex` shows the 3-bit operand type fields in `hi64` are **non-contiguous**: `typeA = (bit83 << 2) | (bit82 << 1) | bit78`, `typeB = (bit85 << 2) | (bit84 << 1) | bit79` (`bit 80` is the sparse flag, so a contiguous 3-bit mask at bit 78 corrupts bit 79/80). Codes map to `0=E4M3`, `1=E5M2`, `2=E3M4FN` (silently skipped by `nvdisasm`, executed natively by hardware), `3=E3M2`, `4=E2M3`, `5=E2M1`, while `6`/`7` decode as `INVALID6`/`INVALID7` and raise `CUDA_ERROR_ILLEGAL_INSTRUCTION`. Probing `a × 0x30` with unit UE8M0 scale confirms exact **E3M4FN** semantics (`1s + 3e bias=3 + 4m`, no Inf): subnormals `0x01 = 2⁻⁶ (0.015625)`..`0x0F = 15/64`, normals `0x10 = 0.25`, `0x30 = 1.0`, `0x31 = 1.0625`, max finite `0x7E = 30.0`, NaN only at `0x7F`/`0xFF`, negative `0xB0 = -1.0`. Both `E3M4×E3M4` and `E4M3×E3M4` sustain full **`2045.2 FLOP/SM/clk`**.
 
 ### Route 2 precision toolbox (stock drivers)
 
 | Workload / Precision | Recommended Path | Ideal Rate (`OP/SM/clk`) | Accuracy Trade-Off |
 |---|---|---:|---|
 | FP8 (`e4m3`/`e5m2`, per-tensor/channel) | CUDA 13.2+ `cuBLASLt`, or unit-scale `QMMA.SF` (`0x7F`) | `2048` (sparse `4096`) | Bit-identical to plain FP8→FP32; keep tensor/channel scale in epilogue |
+| MXFP8 `E3M4FN` (SASS-patched cubin) | Patched `QMMA.SF.16832` (`code = 2`) + UE8M0 | `2048` | +1-bit mantissa over E4M3 (max finite `30.0`, no PTX syntax; requires cubin patching) |
 | Mixed FP8×FP6 / FP8×FP4 (`W6A8` / `W4A8`) | Unit-scale / block-scaled `QMMA.SF` | `2048` | Bit-identical to plain `kind::f8f6f4` |
 | MXFP4 / NVFP4 | `OMMA.SF.16864` (`mxf4` / `mxf4nvf4`) | `4096` | FP4 quantization error only |
 | FP16 / BF16 / TF32 (precision-first) | INT8 `IMMA` multi-slice (Ozaki) | `2048 ÷ products` | Controllable (exact INT32 accumulation); note 2×2 FP8-sliced BF16 needs 4 products (`2048/4 = 512`), offering no speedup over clamped `HMMA` |
