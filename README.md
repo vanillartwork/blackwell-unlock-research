@@ -54,10 +54,38 @@ Route 1 proceeds in two stages, with this repository covering the engineering se
 
 ### Route 2 · Software workarounds available today
 
-Until a hardware or firmware bypass exists for `HMMA`, two software paths work immediately on stock drivers depending on precision:
+Until a hardware or firmware bypass lifts the `HMMA` clamp, two software paths work immediately on stock drivers depending on precision. All measurements below were collected on the same **GB205 (RTX 5070 Ti Laptop, 140 W TDP, driver `621.01`, CUDA `13.5`)**:
 
-- **FP8 / FP6 / mixed FP8 & FP4 (`QMMA.SF` / `OMMA.SF` / CUDA 13.2+, full rate with no accuracy loss).** While legacy `QMMA` is clamped at `1024 FLOP/SM/clk` (`0.50×`), Blackwell's block-scaled `QMMA.SF.16832` (`kind::mxf8f6f4` with constant unit UE8M0 scale `0x7F7F7F7F`) runs unclamped at **`~2045–2048 FLOP/SM/clk`** (`2.00×`, `0 / 33,554,432` bit diffs) whenever **at least one operand is an 8-bit float (`e4m3`, `e5m2`, or SASS-patched undocumented `E3M4FN` type code `2`)**—covering `e4m3`/`e5m2`/`E3M4FN`, mixed `FP8×FP6`/`FP8×FP4`, **lossless `FP6 → E4M3` upcast (`2048.1 FLOP/SM/clk`, `0` bit diffs across all 5 FP6/FP4 mixes)**, and 2:4 sparse `QMMA.SF.SP` (**`4026.4 FLOP/SM/clk`**, `1.97×`). Full-rate FP4 (**`4087.7 FLOP/SM/clk`**) requires `OMMA.SF.16864` (`mxf4`/`mxf4nvf4`), and INT8 `IMMA` runs unclamped at **`2031.8 OP/SM/clk`**. On GB205 (driver `621.01`), `N = 8192` FP8→FP32 GEMM (`FAST_ACCUM=0`) jumped from **111.80 TFLOP/s** (CUDA 12.8) to **241.70 TFLOP/s** (CUDA 13.5 `cuBLASLt`). [Full GB205 MMA matrix & toolbox](software/README.md#4-full-rate-fp8fp32-via-qmmasf-and-cuda-132) · [Route 2 deep dive](docs/route2-mma-bypass.md)
-- **FP16 / BF16 → FP32 (SM 12.0 TMA-WS `Pure B1` / `C1+B1` & PyTorch K-chunked drop-in).** Exhaustive SM 12.0 scanning of all 4,096 12-bit opcodes confirms no `HMMA.SF` exists, and throttled MMAs (`HMMA.F32`, unscaled `QMMA`, non-FP8 `QMMA.SF`) share a 16-cycle datapath gated by a hard **32-cycle per-SMSP cooldown gate (no burst credit)**—so `1:2` (`HMMA.F32 : HMMA.F16`) interleaving incurs `0.0%` gate penalty. On GB205 (`4096×14336×4080`, steady-state NVML), a `128×256×48` TMA + `mbarrier` + `setmaxnreg 40/232` kernel reaches **`80.71 TF/s` (`848.9 FLOP/SM/clk`, `1.69×` per-GHz vs. `cuBLAS BF16→FP32`)** for `Pure B1 (N=3)` and **`76.62 TF/s` (`797.2 FLOP/SM/clk`, `1.58×` per-GHz)** for `C1+B1 (N=2)` (wall-clock `1.33×` / `1.26×` under the 140 W mobile TDP wall). Replaced across every linear layer of `Llama-3.2-1B` (full **288,768-token WikiText-2-raw** vs. true FP64-accum reference) and `Qwen2.5-1.5B`, both `Pure B1` and `C1+B1+K-perm` are indistinguishable from `cuBLAS BF16→FP32` in BF16 deployment and add only `+1.35e-6` / `+6.46e-7` excess KL in FP16 deployment (`+1.03e-6` / `+4.56e-7` with FP32 `lm_head`), while unflushed `Pure F16` adds `+2.90e-4` (`23×`–`65×` worse). For large-`K` non-zero-mean GEMMs, standalone `HMMA.F32 + RN16` matches native speed while cutting error **19×–84×** vs. `cublasGemmEx`. A quick PyTorch-only K-chunked drop-in is also included (`48.90 TFLOP/s`, `+10%`, `0.001644` error at `chunk_k=2048`, `N=K=8192`). [Route 2 deep dive & selection table](docs/route2-mma-bypass.md) · [Operator usage and PyTorch sweep](software/README.md)
+| Precision & Workload | Recommended Path | Measured Throughput / Speedup | Accuracy & Error |
+| :--- | :--- | :--- | :--- |
+| **FP8 / FP6 / Mixed FP8** | Unit-scale `QMMA.SF` / lossless `FP6 → E4M3` | **~2045–2048 FLOP/SM/clk** (**2.00×**, full rate) | **Bit-exact** (`0` bit diffs) |
+| **FP4 / 2:4 Sparse FP8** | `OMMA.SF` (`mxf4`/`mxf4nvf4`) / `QMMA.SF.SP` | **4087.7** / **4026.4 FLOP/SM/clk** (full rate) | No extra format loss (bit-exact on sparse FP8) |
+| **FP16 / BF16 → FP32** | SM 12.0 TMA-WS `Pure B1` / `C1+B1` | **1.69× / 1.58× per-GHz** (1.33× / 1.26× wall at 140 W) | **Indistinguishable** in BF16 deploy; `+1.35e-6` / `+6.46e-7` excess KL in FP16 |
+| **Large-`K` Non-Zero-Mean GEMM** | `HMMA.F32 + RN16` (periodic RN flush) | **1.00×** (matches native rate) | **19×–84× more accurate** than `cuBLAS` |
+| **Zero-Compile Drop-In** | Pure-PyTorch chunked matmul (`chunk_k=2048`) | **48.90 TFLOP/s** (**+10%** at `N=K=8192`) | Sample relative L2 error `0.001644` |
+
+#### 1. FP8 / FP6 / FP4: Lossless Full Rate (`QMMA.SF` / `OMMA.SF`)
+
+- **Unit-scale FP8 (`2.00×`):** Legacy unscaled `QMMA` is clamped at `1024 FLOP/SM/clk` (`0.50×`). Switching to block-scaled `QMMA.SF.16832` with constant unit scale (`UE8M0 = 0x7F7F7F7F`) unlocks full **`~2045–2048 FLOP/SM/clk`** (`0 / 33,554,432` bit diffs) whenever at least one operand is an 8-bit float.
+  - Supported formats: `e4m3`, `e5m2`, SASS-patched undocumented **`E3M4FN`** (type code `2`), mixed `FP8×FP6` / `FP8×FP4`, and 2:4 sparse `QMMA.SF.SP` (`4026.4 FLOP/SM/clk`, `1.97×`).
+  - End-to-end GEMM: At `N = 8192` FP8→FP32 (`FAST_ACCUM=0`), throughput jumped from `111.80 TFLOP/s` (CUDA 12.8) to **`241.70 TFLOP/s`** (CUDA 13.5 `cuBLASLt`).
+- **Lossless FP6 upcast (`2.00×`):** Upcasting at least one FP6 operand (`e3m2` / `e2m3`) to `E4M3` at load time and issuing `QMMA.SF` gives **`0` bit differences** across all five FP6/FP4 mixes while doubling throughput from `1023.5` to **`2048.1 FLOP/SM/clk`**.
+- **Other full-rate paths:** Full-rate FP4 (`4087.7 FLOP/SM/clk`) requires `OMMA.SF.16864` (`mxf4` / `mxf4nvf4`); INT8 `IMMA` runs unclamped at `2031.8 OP/SM/clk`.
+
+> Further reading: [Full GB205 MMA matrix & toolbox](software/README.md#4-full-rate-fp8fp32-via-qmmasf-and-cuda-132) · [Route 2 deep dive](docs/route2-mma-bypass.md)
+
+#### 2. FP16 / BF16 → FP32: TMA-WS Chunked & Interleaved Kernels
+
+- **Throttle-gate model:** Exhaustive SM 12.0 scanning of all 4,096 12-bit opcodes confirms **no `HMMA.SF` exists**. All throttled MMAs (`HMMA.F32`, unscaled `QMMA`, non-FP8 `QMMA.SF`) share a 16-cycle datapath gated by a hard **32-cycle per-SMSP cooldown gate (no burst credit)**; interleaving at **`1:2`** (`HMMA.F32 : HMMA.F16`) incurs zero gate penalty.
+- **Real GEMM throughput** (`4096×14336×4080`, `128×256×48` TMA + `mbarrier` + `setmaxnreg 40/232`, steady-state NVML):
+  - **`Pure B1 (N=3)`:** **`80.71 TF/s`** (`848.9 FLOP/SM/clk`), **`1.69×`** faster per GHz than `cuBLAS BF16→FP32` (`1.33×` wall-clock under the 140 W laptop TDP cap).
+  - **`C1+B1 (N=2)`:** **`76.62 TF/s`** (`797.2 FLOP/SM/clk`), **`1.58×`** faster per GHz (`1.26×` wall-clock).
+- **End-to-end LLM quality** (`Llama-3.2-1B` full 288,768-token WikiText-2-raw & `Qwen2.5-1.5B`, every linear layer replaced, true FP64-accum reference):
+  - **BF16 deployment:** Both `Pure B1` and `C1+B1` are **statistically indistinguishable** from `cuBLAS BF16→FP32`.
+  - **FP16 deployment:** Absolute excess KL vs. native `HMMA.F32` is only **`+1.35e-6`** (`Pure B1`, keeping `lm_head`) and **`+6.46e-7`** (`C1+B1 + K-perm`, all layers), or `+1.03e-6` and `+4.56e-7` under the FP32-`lm_head` high-resolution lens; unflushed `Pure F16` reaches `+2.90e-4` (`23×–65×` worse).
+- **Additional paths:** For large-`K` non-zero-mean GEMMs, `HMMA.F32 + RN16` matches native speed while cutting error **`19×–84×`** vs. `cuBLAS`; a zero-compile PyTorch chunked drop-in is also included (`48.90 TFLOP/s`, `+10%`, relative L2 error `0.001644` at `N=K=8192`, `chunk_k=2048`).
+
+> Further reading: [Route 2 deep dive & selection table](docs/route2-mma-bypass.md) · [Operator usage and PyTorch sweep](software/README.md)
 
 ## 2. Prior triage & background work
 
