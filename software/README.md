@@ -74,10 +74,38 @@ python3 scripts/verify-baseline.py --clamp-json clamp-local.json --compare repor
 
 ## 4. Full-rate FP8→FP32 via `QMMA.SF` and CUDA 13.2+
 
-For **FP8 (E4M3) → FP32** workloads specifically, you do not need a precision trade-off on stock consumer Blackwell cards:
+For **FP8 (E4M3 / E5M2) → FP32** and mixed FP8×FP6 / FP8×FP4 workloads, stock consumer Blackwell cards do not require a precision trade-off:
 
-- **Mechanism.** While legacy `QMMA` (`m16n8k32.f32.e4m3.e4m3.f32`) is clamped at `0.50×`, Blackwell's microscaling instruction `QMMA.SF.16832.F32.E4M3.E4M3.E8` (`mma.sync.aligned.kind::mxf8f6f4.block_scale.scale_vec::1X` with constant unit UE8M0 scale `0x7F7F7F7F`) is **not** clamped and produces bit-identical FP32 accumulators (corroborated across RTX 5080 in [NVIDIA/cutlass#3732](https://github.com/NVIDIA/cutlass/issues/3732), RTX 5090 in [flashinfer-ai/flashinfer#5963](https://github.com/flashinfer-ai/flashinfer/issues/5963), and RTX 5070 Laptop in [steviecurrie/gpu-unlock-gb206#1](https://github.com/steviecurrie/gpu-unlock-gb206/issues/1)).
-- **Local GB205 verification (RTX 5070 Ti Laptop, 46 SMs, driver `621.01`, CUDA 13.5):**
-  - Raw MMA microbenchmark (`sm_120a`, SASS verified with `cuobjdump`): plain `QMMA` measured **`1020.0 FLOP/SM/clk`** (`0.498×`, `128.31 TFLOP/s`) vs unit-scale `QMMA.SF` at **`1956.3 FLOP/SM/clk`** (`0.955×`, `235.83 TFLOP/s`, `1.918×` cycle-normalized speedup), with exact FP32 accumulation (`256² + 0.125² = 65536.015625`, `0x47800002`).
-  - `N=8192` FP8→FP32 GEMM (`cuBLASLt 131000`, CUDA 13.5): **`241.70 TFLOP/s`** (`FAST_ACCUM=0`, `4.55 ms/iter`) and **`239.93 TFLOP/s`** (`FAST_ACCUM=1`, `4.58 ms/iter`), up **`2.16×`** over the archived PyTorch `2.11.0+cu128` (CUDA 12.8) baseline (`111.80 TFLOP/s`, `0.50×`) on the exact same GPU and driver.
-- **Practical takeaway and boundary.** For FP8→FP32 GEMMs, upgrading to **CUDA 13.2+** (`cuBLASLt` automatically dispatches `QMMA.SF`) or switching custom CUTLASS / CuTe / FlashInfer kernels to unit-scale `QMMA.SF` recovers full rate without losing FP32 accumulation precision. However, **`HMMA` (FP16 / BF16 / TF32 → FP32) has no microscaling equivalent and remains clamped at `0.5×`**, so FP16/BF16 workloads still rely on the K-chunked operator above (or Route 1 firmware research).
+- **Mechanism & exact operand rule.** While legacy `QMMA` (`kind::f8f6f4`) is clamped at `1024 FLOP/SM/clk` (`0.50×`), Blackwell's block-scaled `QMMA.SF.16832.F32.<A>.<B>.E8` (`kind::mxf8f6f4.block_scale.scale_vec::1X` with constant unit UE8M0 scale `0x7F7F7F7F`) is **unclamped whenever at least one operand is FP8 (`e4m3` or `e5m2`)**—and produces bit-identical FP32 accumulators (corroborated on RTX 5080 in [NVIDIA/cutlass#3732](https://github.com/NVIDIA/cutlass/issues/3732), RTX 5090 in [flashinfer-ai/flashinfer#5963](https://github.com/flashinfer-ai/flashinfer/issues/5963), and RTX 5070 Laptop in [steviecurrie/gpu-unlock-gb206#1](https://github.com/steviecurrie/gpu-unlock-gb206/issues/1)). If **neither** operand is FP8 (`FP6×FP6`, `FP6×FP4`, or `FP4×FP4` via `QMMA.SF.16832`), throughput remains at `1024 FLOP/SM/clk`; full-rate FP4 (`4096 FLOP/SM/clk`) requires `OMMA.SF.16864` (`kind::mxf4` or `kind::mxf4nvf4`).
+- **Local GB205 SASS-verified matrix (RTX 5070 Ti Laptop, 46 SMs, driver `621.01`, CUDA 13.5, `sm_120a`, random non-zero finite inputs, `clock64()` cycle-normalized):**
+
+| Format / Mode | SASS Opcode (`cuobjdump`) | Measured `FLOP/SM/clk` | Wall `TFLOP/s` | Notes |
+|---|---|---:|---:|---|
+| `HMMA` FP16→FP32 (`k16`) | `HMMA.16816.F32` | `511.8` | 57.56 | Clamped `0.50×` |
+| `HMMA` BF16→FP32 (`k16`) | `HMMA.16816.F32.BF16` | `511.4` | 56.80 | Clamped `0.50×` |
+| `HMMA` FP16→FP16 (`k16`) | `HMMA.16816.F16` | `1023.2` | 114.20 | Full `1.00×` |
+| FP8 `e4m3×e4m3` plain vs **`QMMA.SF`** | `QMMA` → **`QMMA.SF.16832...E8`** | `1022.4` → **`2045.3`** | 115.67 → **226.34** | **`2.00×`**, `0 / 33,554,432` bit diffs |
+| FP8 `e5m2×e5m2` plain vs **`QMMA.SF`** | `QMMA` → **`QMMA.SF.16832...E8`** | `1022.4` → **`2045.3`** | 113.67 → **225.21** | **`2.00×`**, `0 / 33,554,432` bit diffs |
+| FP8 `e4m3×e5m2` plain vs **`QMMA.SF`** | `QMMA` → **`QMMA.SF.16832...E8`** | `1022.4` → **`2045.3`** | 115.42 → **222.27** | **`2.00×`**, `0 / 33,554,432` bit diffs |
+| Mixed `e4m3×e3m2` / `e3m2×e4m3` **`QMMA.SF`** | **`QMMA.SF.16832...E8`** | **`2045.5`** | **225.68 / 225.03** | **`2.00×`** (FP8 operand present) |
+| Mixed `e4m3×e2m1` / `e2m1×e4m3` / `e5m2×e2m1` **`QMMA.SF`** | **`QMMA.SF.16832...E8`** | **`2044.3–2044.9`** | **225.22–227.77** | **`2.00×`**, `0 / 33,554,432` bit diffs (`e4m3×e2m1`) |
+| FP6 `e3m2×e3m2` / `e2m3×e2m3` plain vs `QMMA.SF` | `QMMA` / `QMMA.SF.16832...E8` | `1022.5` vs **`1023.1`** | 115.92 vs 115.79 | **Remains half-rate** (no FP8 operand) |
+| Mixed `e3m2×e2m1` `QMMA.SF` | `QMMA.SF.16832...E8` | **`1023.2`** | 115.61 | **Remains half-rate** (no FP8 operand) |
+| Sparse 2:4 FP8 `e4m3` plain vs **`QMMA.SF.SP`** (`k64`) | `QMMA.SP` → **`QMMA.SF.SP.16864...E8`** | `2045.9` → **`4026.4`** | 230.94 → **440.18** | **`1.97×`** sparse full rate |
+| FP4 `e2m1×e2m1` `k32` plain / `mxf8f6f4` | `QMMA` / `QMMA.SF.16832` | `1022.0` / `1022.9` | 115.42 / 115.99 | Half-rate in `k32` form |
+| FP4 `e2m1×e2m1` **`mxf4`** (`UE8M0`) / **`mxf4nvf4`** (`UE4M3`) | **`OMMA.SF.16864...`** | **`4087.7`** | **459.01 / 457.76** | **Full `4096` rate** |
+| INT8 `s8×s8→s32` (`k32`) | `IMMA.16832.S8.S8` | **`2031.8`** | **227.75** | **Full `2048` OP/SM/clk** (usable for Ozaki slicing) |
+| INT4 `s4×s4→s32` (`k64`) | Emulated via `IMMA.16832.S8.S8` | `213.7` | 24.27 | `~0.05×` of 4096; no native INT4 MMA on SM 12.0 |
+
+  - **Precision & `cuBLASLt` check (same GB205, driver `621.01`).** `QMMA.SF` passed exact FP32 accumulation on `256² + 0.125² = 65536.015625` (`0x47800002`), and negative controls with UE8M0 scale `2.0` (`0x80`) differed in `~33.55M / 33.55M` registers. At `N=8192` FP8→FP32 GEMM, CUDA 13.5 `cuBLASLt 131000` reached **`241.70 TFLOP/s`** (`FAST_ACCUM=0`, `4.55 ms/iter`) and **`239.93 TFLOP/s`** (`FAST_ACCUM=1`, `4.58 ms/iter`), up **`2.16×`** over the archived PyTorch `2.11.0+cu128` (CUDA 12.8) baseline (`111.80 TFLOP/s`, `0.50×`).
+  - **Unverified format.** `E3M4` is not exposed in standard PTX (`nvcc 13.5`) and would require undocumented SASS patching; it was not tested here.
+
+### Route 2 precision toolbox (stock drivers)
+
+| Workload / Precision | Recommended Path | Ideal Rate (`OP/SM/clk`) | Accuracy Trade-Off |
+|---|---|---:|---|
+| FP8 (`e4m3`/`e5m2`, per-tensor/channel) | CUDA 13.2+ `cuBLASLt`, or unit-scale `QMMA.SF` (`0x7F`) | `2048` (sparse `4096`) | Bit-identical to plain FP8→FP32; keep tensor/channel scale in epilogue |
+| Mixed FP8×FP6 / FP8×FP4 (`W6A8` / `W4A8`) | Unit-scale / block-scaled `QMMA.SF` | `2048` | Bit-identical to plain `kind::f8f6f4` |
+| MXFP4 / NVFP4 | `OMMA.SF.16864` (`mxf4` / `mxf4nvf4`) | `4096` | FP4 quantization error only |
+| FP16 / BF16 / TF32 (precision-first) | INT8 `IMMA` multi-slice (Ozaki) | `2048 ÷ products` | Controllable (exact INT32 accumulation); note 2×2 FP8-sliced BF16 needs 4 products (`2048/4 = 512`), offering no speedup over clamped `HMMA` |
+| FP16 / BF16 (speed-first inference) | K-chunked `HMMA.F16` + FP32 reduction (§2 above) | `1024` (less chunk overhead) | Short-segment FP16 rounding error (`~1e-3` at `chunk_k=2048`) |

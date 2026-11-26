@@ -74,10 +74,38 @@ python3 scripts/verify-baseline.py --clamp-json clamp-local.json --compare repor
 
 ## 4. FP8→FP32 满速软件路径（`QMMA.SF` 与 CUDA 13.2+）
 
-针对 **FP8（E4M3）→ FP32** 场景，原装消费级 Blackwell 显卡无需牺牲精度即可拿回满速：
+针对 **FP8（E4M3 / E5M2）→ FP32** 以及混合 **FP8×FP6 / FP8×FP4** 场景，原装消费级 Blackwell 显卡无需牺牲精度即可拿回满速：
 
-- **原理。** 传统非缩放 `QMMA`（`m16n8k32.f32.e4m3.e4m3.f32`）被锁在 `0.50×`，但 Blackwell 新增的微缩放指令 `QMMA.SF.16832.F32.E4M3.E4M3.E8`（`mma.sync.aligned.kind::mxf8f6f4.block_scale.scale_vec::1X`，配合寄存器常量单位 UE8M0 缩放因子 `0x7F7F7F7F`）**未被限速**，且输出与普通 `QMMA` 逐位一致（已在 RTX 5080 [NVIDIA/cutlass#3732](https://github.com/NVIDIA/cutlass/issues/3732)、RTX 5090 [flashinfer-ai/flashinfer#5963](https://github.com/flashinfer-ai/flashinfer/issues/5963) 及 RTX 5070 Laptop [steviecurrie/gpu-unlock-gb206#1](https://github.com/steviecurrie/gpu-unlock-gb206/issues/1) 上跨卡印证）。
-- **本机 GB205 一手复现（RTX 5070 Ti Laptop，46 SM，驱动 `621.01`，CUDA 13.5）：**
-  - 指令级微基准（`sm_120a`，`cuobjdump` 已核对 SASS）：普通 `QMMA` 为 **`1020.0 FLOP/SM/clk`**（`0.498×`，`128.31 TFLOP/s`），单位缩放 `QMMA.SF` 达到 **`1956.3 FLOP/SM/clk`**（`0.955×`，`235.83 TFLOP/s`，时钟归一化提速 `1.918×`）；精度验证 `256² + 0.125² = 65536.015625`（`0x47800002`）精确无损。
-  - `N=8192` FP8→FP32 GEMM（CUDA 13.5 `cuBLASLt 131000`）：`FAST_ACCUM=0` 测得 **`241.70 TFLOP/s`**（`4.55 ms/iter`），`FAST_ACCUM=1` 为 **`239.93 TFLOP/s`**（`4.58 ms/iter`）——同卡同驱动下较归档的 PyTorch `2.11.0+cu128`（CUDA 12.8）基线（`111.80 TFLOP/s`，`0.50×`）直接提升 **`2.16×`**。
-- **落地建议与适用边界。** 跑 FP8→FP32 矩阵乘时，升级到 **CUDA 13.2+**（新版 `cuBLASLt` 会自动走 `QMMA.SF`）或在自定义 CUTLASS / CuTe / FlashInfer 内核中改发单位缩放 `QMMA.SF`，即可无损拿回满速。但 **`HMMA`（FP16 / BF16 / TF32 → FP32）没有对应的微缩放指令，依然锁在 `0.5×`**，仍需依赖上文的 K 维分块规约（或路线 1 的固件层研究）。
+- **原理与精确硬件门控规律。** 传统非缩放 `QMMA`（`kind::f8f6f4`）被锁在 `1024 FLOP/SM/clk`（`0.50×`），而 Blackwell 新增的微缩放指令 `QMMA.SF.16832.F32.<A>.<B>.E8`（`kind::mxf8f6f4.block_scale.scale_vec::1X`，配合寄存器常量单位 UE8M0 缩放 `0x7F7F7F7F`）**只要两个操作数中至少有一个是 FP8（`e4m3` 或 `e5m2`）即可跑满 `2048 FLOP/SM/clk`**，且输出与普通 `QMMA` 逐位一致（已在 RTX 5080 [NVIDIA/cutlass#3732](https://github.com/NVIDIA/cutlass/issues/3732)、RTX 5090 [flashinfer-ai/flashinfer#5963](https://github.com/flashinfer-ai/flashinfer/issues/5963) 及 RTX 5070 Laptop [steviecurrie/gpu-unlock-gb206#1](https://github.com/steviecurrie/gpu-unlock-gb206/issues/1) 上跨卡印证）。如果**两个操作数都不是 FP8**（如纯 `FP6×FP6`、`FP6×FP4` 或 `k32` 版 `FP4×FP4`），`QMMA.SF.16832` 仍停在 `1024 FLOP/SM/clk`；满速 FP4（`4096 FLOP/SM/clk`）必须改走 `OMMA.SF.16864`（`kind::mxf4` 或 `kind::mxf4nvf4`）。
+- **本机 GB205 全矩阵一手实测（RTX 5070 Ti Laptop，46 SM，驱动 `621.01`，CUDA 13.5，`sm_120a`，非零随机有限输入，`clock64()` 时钟归一化）：**
+
+| 精度 / 模式 | 实测 SASS 指令（`cuobjdump`） | 实测 `FLOP/SM/clk` | 稳态 `TFLOP/s` | 结论与精度核验 |
+|---|---|---:|---:|---|
+| `HMMA` FP16→FP32 (`k16`) | `HMMA.16816.F32` | `511.8` | 57.56 | 锁死 `0.50×` |
+| `HMMA` BF16→FP32 (`k16`) | `HMMA.16816.F32.BF16` | `511.4` | 56.80 | 锁死 `0.50×` |
+| `HMMA` FP16→FP16 (`k16`) | `HMMA.16816.F16` | `1023.2` | 114.20 | 满速 `1.00×` |
+| FP8 `e4m3×e4m3` 普通 vs **`QMMA.SF`** | `QMMA` → **`QMMA.SF.16832...E8`** | `1022.4` → **`2045.3`** | 115.67 → **226.34** | **`2.00×`**，`0 / 33,554,432` 位差异 |
+| FP8 `e5m2×e5m2` 普通 vs **`QMMA.SF`** | `QMMA` → **`QMMA.SF.16832...E8`** | `1022.4` → **`2045.3`** | 113.67 → **225.21** | **`2.00×`**，`0 / 33,554,432` 位差异 |
+| FP8 `e4m3×e5m2` 普通 vs **`QMMA.SF`** | `QMMA` → **`QMMA.SF.16832...E8`** | `1022.4` → **`2045.3`** | 115.42 → **222.27** | **`2.00×`**，`0 / 33,554,432` 位差异 |
+| 混合 `e4m3×e3m2` / `e3m2×e4m3` **`QMMA.SF`** | **`QMMA.SF.16832...E8`** | **`2045.5`** | **225.68 / 225.03** | **`2.00×`**（含 FP8 操作数） |
+| 混合 `e4m3×e2m1` / `e2m1×e4m3` / `e5m2×e2m1` **`QMMA.SF`** | **`QMMA.SF.16832...E8`** | **`2044.3–2044.9`** | **225.22–227.77** | **`2.00×`**，`0 / 33,554,432` 位差异（`e4m3×e2m1`） |
+| FP6 `e3m2×e3m2` / `e2m3×e2m3` 普通 vs `QMMA.SF` | `QMMA` / `QMMA.SF.16832...E8` | `1022.5` vs **`1023.1`** | 115.92 vs 115.79 | **仍为半速**（无 FP8 操作数） |
+| 混合 `e3m2×e2m1` `QMMA.SF` | `QMMA.SF.16832...E8` | **`1023.2`** | 115.61 | **仍为半速**（无 FP8 操作数） |
+| 2:4 稀疏 FP8 `e4m3` 普通 vs **`QMMA.SF.SP`** (`k64`) | `QMMA.SP` → **`QMMA.SF.SP.16864...E8`** | `2045.9` → **`4026.4`** | 230.94 → **440.18** | **`1.97×`** 跑满稀疏满速 |
+| FP4 `e2m1×e2m1` `k32` 普通 / `mxf8f6f4` | `QMMA` / `QMMA.SF.16832` | `1022.0` / `1022.9` | 115.42 / 115.99 | `k32` 形态仍为半速 |
+| FP4 `e2m1×e2m1` **`mxf4`** (`UE8M0`) / **`mxf4nvf4`** (`UE4M3`) | **`OMMA.SF.16864...`** | **`4087.7`** | **459.01 / 457.76** | **跑满 `4096`** |
+| INT8 `s8×s8→s32` (`k32`) | `IMMA.16832.S8.S8` | **`2031.8`** | **227.75** | **跑满 `2048` OP/SM/clk**（可用于 Ozaki 切片） |
+| INT4 `s4×s4→s32` (`k64`) | 由 `IMMA.16832.S8.S8` 软模拟 | `213.7` | 24.27 | 仅 `~0.05×`；SM 12.0 无原生 INT4 硬件 MMA |
+
+  - **精度与 `cuBLASLt` 对照（同卡 GB205，驱动 `621.01`）。** `QMMA.SF` 在 `256² + 0.125² = 65536.015625`（`0x47800002`）上精确无损；对照组把 UE8M0 缩放改为 `2.0`（`0x80`）时约 `33.55M / 33.55M` 个寄存器产生差异。`N=8192` FP8→FP32 GEMM 下，CUDA 13.5 `cuBLASLt 131000` 在 `FAST_ACCUM=0` 测得 **`241.70 TFLOP/s`**（`4.55 ms/iter`），`FAST_ACCUM=1` 为 **`239.93 TFLOP/s`**（`4.58 ms/iter`），较同卡归档的 PyTorch `2.11.0+cu128`（CUDA 12.8）基线（`111.80 TFLOP/s`，`0.50×`）直接提升 **`2.16×`**。
+  - **未验证项说明。** `E3M4` 未在标准 PTX（`nvcc 13.5`）中公开，需要手写或二进制修补 SASS，本仓库暂未实测。
+
+### 路线 2 现行软件工具箱（原装驱动）
+
+| 场景 / 精度 | 推荐路径 | 理论速率（`OP/SM/clk`） | 精度与工程说明 |
+|---|---|---:|---|
+| FP8（`e4m3`/`e5m2`，逐张量/逐通道） | CUDA 13.2+ `cuBLASLt`，或单位缩放 `QMMA.SF`（`0x7F`） | `2048`（稀疏 `4096`） | 与普通 FP8→FP32 逐位一致；逐张量/逐通道缩放留到 epilogue 乘即可，无需凑 128×4 缩放布局 |
+| 混合 FP8×FP6 / FP8×FP4（`W6A8` / `W4A8`） | 单位缩放 / 块缩放 `QMMA.SF` | `2048` | 与普通 `kind::f8f6f4` 逐位一致 |
+| MXFP4 / NVFP4 | `OMMA.SF.16864`（`mxf4` / `mxf4nvf4`） | `4096` | 仅有 FP4 量化误差 |
+| FP16 / BF16 / TF32（精度优先） | INT8 `IMMA` 多切片（Ozaki） | `2048 ÷ 乘积次数` | INT32 精确累加、误差可控；注：用两片 FP8 拼 BF16 完整精度需 4 次乘积（`2048/4 = 512`），与锁死 `HMMA` 持平无净收益 |
+| FP16 / BF16（速度优先推理） | K 维分块 `HMMA.F16` + FP32 归约（见上文第 2 节） | `1024`（扣除分块开销） | 有短段 FP16 累加误差（`chunk_k=2048` 时约 `1e-3`） |
