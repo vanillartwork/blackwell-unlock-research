@@ -12,9 +12,9 @@
 |---|---|
 | [clamp_eval.py](clamp_eval.py) | 跨平台稳态张量钳制评估器（`fp16_fp16acc` / `fp16_fp32acc` / `bf16_fp32acc` / `tf32_fp32acc` / `fp8_fp32acc` / `int8` / `fp32_control` + `16×16` CPU FP64 相对 L2 误差 + 顺序平衡配对 A/B） |
 | [chunked_fp16_matmul.py](chunked_fp16_matmul.py) | K 维分块 FP16 累加 + FP32 块间归约（提供可导入的 `chunked_fp16_mm` / `chunked_fp16_matmul` 函数及 CLI 帕累托扫描） |
-| [dual_qmma_tma_ws.cu](dual_qmma_tma_ws.cu) | SM 12.0 `TMA-WS 128×256×64` 单侧双发 `QMMA.SF`（`W8A16` / `W4A16`，含预拆分 / 独立两核 / 单核在线拆分、融合 `RMSNorm`/`SwiGLU` 双拆分 epilogue 与稳态 NVML 基准） |
-| [verify_dual_fp8.py](verify_dual_fp8.py) | 纯标准库（无 GPU）复算脚本，校验 `reports/gb205-2f18/route2-dual-qmma-621.01.json` 全部 TMA-WS 吞吐、Prefill 竞品前沿（含真实上游 `vLLM Marlin` / `Dequant-HMMA.F32` / `Dequant-HMMA.F16` / `W4A4`）、冷 L2 Decode 扫描与纯带宽消融、同权重融合 MLP、5.17 亿块分布扫描与 32k 双口径 LLM KL（含 `W4A4` 与部署冻结 K 平滑） |
-| [verify_wt2_bootstrap.py](verify_wt2_bootstrap.py) | 纯标准库（无 GPU / 无第三方依赖）复算脚本，可直接从 `reports/gb205-2f18/route2-wt2-288k-fp64.json` 重算均值、ΔPPL、超额 KL、压缩比与 95% 配对 bootstrap 置信区间 |
+| [dual_qmma_tma_ws.cu](dual_qmma_tma_ws.cu) | 迁移说明桩（完整 SM 12.0 Dual `QMMA.SF` 内核与基准已迁入独立路线 2 研究仓库，链接待补；拆分前完整版见 tag `v1-pre-split`） |
+| [verify_dual_fp8.py](verify_dual_fp8.py) | 迁移说明桩（完整无 GPU 复算脚本已迁入独立路线 2 研究仓库，链接待补；拆分前完整版见 tag `v1-pre-split`） |
+| [verify_wt2_bootstrap.py](verify_wt2_bootstrap.py) | 迁移说明桩（完整 288k WikiText-2 bootstrap 复算脚本已迁入独立路线 2 研究仓库，链接待补；拆分前完整版见 tag `v1-pre-split`） |
 
 ---
 
@@ -123,6 +123,6 @@ python3 scripts/verify-baseline.py --clamp-json clamp-local.json --compare repor
 
 ---
 
-## 5. SM 12.0 限速门模型、TMA-WS GEMM 与端到端 LLM 深度报告
+## 5. 完整定制内核与端到端 LLM 研究（已拆分为独立仓库）
 
-关于 SM 12.0 全 4,096 opcode 封口、每 SMSP 32 周期硬冷却门（无突发信用、`1:2` 零惩罚默认值）、`FP6 → E4M3` 无损 2× 提升、`128×256×48` TMA + `mbarrier` + `setmaxnreg 40/232` 稳态 NVML 同频/功耗拆分（与质量动态库 `0 / 2,097,152` 逐位一致）、完整 288,768 tokens WikiText-2-raw 双口径（`FP16`/`FP32` `lm_head`）真 FP64 参考配对 bootstrap 95% CI、BF16 部署对照及硬件部分和溢出余量的完整实证记录，见 **[路线 2 深度报告](../docs/route2-mma-bypass.cn.md)**。
+关于 SM 12.0 全 4,096 opcode 封口、每 SMSP 32 周期硬冷却门、TMA-WS `Pure B1` / `C1+B1` / `Dual-FP8 QMMA.SF` 内核、真实上游 `vLLM Marlin` 与自研 `Dequant-HMMA.F32` 对照、完整 288,768 tokens 与 32k WikiText-2-raw 端到端 LLM 质量评测的完整代码与数据已拆分为独立研究仓库（链接待补；本仓库拆分前完整归档见 tag `v1-pre-split` / 提交 `5761a19`），结论速查见 **[路线 2 结论摘要与迁移说明](../docs/route2-mma-bypass.cn.md)**。

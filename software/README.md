@@ -12,9 +12,9 @@ Measure steady-state throughput and relative L2 error on a Blackwell GPU, then c
 |---|---|
 | [clamp_eval.py](clamp_eval.py) | Compare FP16, BF16, TF32 and FP8 with FP32 accumulation against FP16-accumulate, INT8 and FP32 controls. The benchmark uses a 16 × 16 CPU FP64 reference sample and an order-balanced FP16 A/B comparison. |
 | [chunked_fp16_matmul.py](chunked_fp16_matmul.py) | Import `chunked_fp16_mm` for two matrices or `chunked_fp16_matmul` for batched inputs. The CLI sweeps K chunk sizes and measures throughput and error. |
-| [dual_qmma_tma_ws.cu](dual_qmma_tma_ws.cu) | SM 12.0 `TMA-WS 128×256×64` single-sided Dual `QMMA.SF` (`W8A16` / `W4A16`: pre-split, 2-kernel, online-split) plus fused `RMSNorm`/`SwiGLU` dual-split epilogue kernels and steady-state NVML benchmark. |
-| [verify_dual_fp8.py](verify_dual_fp8.py) | Pure-stdlib (no GPU) verifier checking `reports/gb205-2f18/route2-dual-qmma-621.01.json` (TMA-WS throughput, prefill frontier vs. real upstream `vLLM Marlin` / `Dequant-HMMA.F32` / `Dequant-HMMA.F16` / `W4A4`, cold-L2 decode & raw BW roof, same-weight fused MLP, 517M-block scan, and 32k Deploy+High-Res KL incl. `W4A4` & frozen K-smoothing). |
-| [verify_wt2_bootstrap.py](verify_wt2_bootstrap.py) | Pure-stdlib (no GPU / no third-party dependencies) verifier that recomputes means, ΔPPL, excess KL, compression ratios and 95% paired bootstrap CIs from `reports/gb205-2f18/route2-wt2-288k-fp64.json`. |
+| [dual_qmma_tma_ws.cu](dual_qmma_tma_ws.cu) | Relocation stub (full SM 12.0 Dual `QMMA.SF` kernels & benchmark moved to standalone Route 2 repo, link TBD; pre-split full source at tag `v1-pre-split`). |
+| [verify_dual_fp8.py](verify_dual_fp8.py) | Relocation stub (full CPU verifier moved to standalone Route 2 repo, link TBD; pre-split full script at tag `v1-pre-split`). |
+| [verify_wt2_bootstrap.py](verify_wt2_bootstrap.py) | Relocation stub (full 288k WikiText-2 bootstrap verifier moved to standalone Route 2 repo, link TBD; pre-split full script at tag `v1-pre-split`). |
 
 ---
 
@@ -123,6 +123,6 @@ For **FP8 (E4M3 / E5M2) → FP32** and mixed FP8×FP6 / FP8×FP4 workloads, stoc
 
 ---
 
-## 5. SM 12.0 Throttle-Gate Model, TMA-WS GEMM & End-to-End LLM Study
+## 5. Full Custom Kernels & End-to-End LLM Study (Split Into Standalone Repository)
 
-A complete empirical study on GB205 covering the 4,096-opcode `HMMA` closure, per-SMSP 32-cycle hard cooldown gate (no burst credit, `1:2` zero-penalty mix default), lossless `FP6 → E4M3` 2× upcast, steady-state NVML clock/power separation of `128×256×48` TMA + `mbarrier` + `setmaxnreg 40/232` kernels (`0 / 2,097,152` bit-exact with the LLM evaluation library), full 288,768-token WikiText-2-raw dual-regime (`FP16`/`FP32` `lm_head`) true-FP64 bootstrap with 95% CIs, BF16 deployment control, and hardware FP16 partial-sum overflow headroom is archived in **[Route 2 Deep Dive](../docs/route2-mma-bypass.md)**.
+All custom SM 12.0 kernels (`Pure B1`, `C1+B1`, `Dual-FP8 QMMA.SF`), hardware micro-probes, unmodified upstream `vLLM Marlin` and re-implemented `Dequant-HMMA.F32` comparisons, and 288,768-token / 32k WikiText-2-raw LLM quality studies have been split into a standalone research repository (link to be added upon publication; pre-split snapshot preserved at tag `v1-pre-split` / commit `5761a19`). See **[Route 2 Summary & Relocation Note](../docs/route2-mma-bypass.md)**.

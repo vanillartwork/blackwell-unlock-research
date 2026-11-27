@@ -249,117 +249,23 @@ class ArchivedJsonTests(unittest.TestCase):
                 for key in ("speedup_vs_fp32acc", "error_ratio_vs_fp32acc", "error_reduction_vs_full_fp16acc"):
                     self.assertAlmostEqual(r[key], f[key], places=9)
 
-    def test_route2_wt2_bootstrap_archive_matches_report(self):
-        data = json.loads((GB205 / "route2-wt2-288k-fp64.json").read_text(encoding="utf-8"))
-        self.assertEqual(data["schema"], "blackwell-abi-lab/route2-wt2-bootstrap/1")
-        mod = load("software/verify_wt2_bootstrap.py")
-        summary = mod.compute_summary(data)
-        self.assertEqual(summary["n_chunks"], 282)
-        self.assertEqual(summary["total_tokens"], 288768)
-        doc = read("docs/route2-mma-bypass.md")
-        self.assertIn(f"PPL_hi = {summary['ref_ppl_high_res']:.5f}", doc)
-        self.assertIn(f"PPL_dep = {summary['ref_ppl_deploy']:.5f}", doc)
-        comp_hi = summary["compression_pure_b1_all_over_c1b1_kp_all"]["high_res"]
-        comp_dep = summary["compression_pure_b1_all_over_c1b1_kp_all"]["deploy"]
-        self.assertIn(f"{comp_hi[0]:.2f}×", doc)
-        self.assertIn(f"{comp_dep[0]:.2f}×", doc)
-        _, body = table_after(doc, "### 3.2 Full WikiText-2-raw")
-        self.assertEqual(len(body), len(summary["rows"]))
-        for row, r in zip(body, summary["rows"]):
-            with self.subTest(key=r["key"]):
-                dep_nums = [float(x) for x in re.findall(r"[+-]?\d+\.\d+e[+-]\d+", plain(row[1]))]
-                hi_nums = [float(x) for x in re.findall(r"[+-]?\d+\.\d+e[+-]\d+", plain(row[2]))]
-                self.assertAlmostEqual(dep_nums[0], r["kl_deploy"], delta=max(r["kl_deploy"] * 0.01, 1e-7))
-                self.assertAlmostEqual(hi_nums[0], r["kl_high_res"], delta=max(r["kl_high_res"] * 0.01, 1e-7))
-                if r["key"] != data["protocol"]["baseline_key"]:
-                    self.assertAlmostEqual(dep_nums[1], r["excess_deploy"][0], delta=max(abs(r["excess_deploy"][0]) * 0.01, 5e-9))
-                    self.assertAlmostEqual(hi_nums[1], r["excess_high_res"][0], delta=max(abs(r["excess_high_res"][0]) * 0.01, 5e-9))
-                self.assertAlmostEqual(first_number(row[3]), r["top1_high_res"], delta=0.011)
-
-    def test_route2_dual_qmma_archive_matches_report(self):
-        data = json.loads((GB205 / "route2-dual-qmma-621.01.json").read_text(encoding="utf-8"))
-        self.assertEqual(data["schema"], "blackwell-abi-lab/route2-dual-qmma/1")
-        mod = load("software/verify_dual_fp8.py")
-        summary = mod.verify_and_summarize(data)
-        self.assertEqual(summary["total_blocks_scanned"], 517031936)
-        self.assertEqual(summary["total_int8_exact_pass"], 0)
-        doc_en = read("docs/route2-mma-bypass.md")
-        doc_zh = read("docs/route2-mma-bypass.cn.md")
-        for doc in (doc_en, doc_zh):
-            self.assertIn("517,031,936", doc)
-            self.assertNotIn("Marlin-HMMA", doc)
-            # Prefill frontier (W4A4, Dequant-HMMA.F32, Single-FP8, Dual-FP8, Real vLLM Marlin, Dequant-HMMA.F16)
-            fr_up = next(sh for sh in data["prefill_frontier"] if sh["M"] == 4096 and sh["N"] == 14336)
-            by_fn = {v["name"]: v for v in fr_up["variants"]}
-            for name in (
-                "W4A4 (OMMA.SF.16864)",
-                "Single-FP8 W4A8 (QMMA.SF)",
-                "Single-FP8 W8A8 (QMMA.SF)",
-                "Dual-FP8 W4A16 (pre-split)",
-                "Dual-FP8 W8A16 (pre-split)",
-                "Dequant-HMMA.F32 W4A16 (ref)",
-                "Dequant-HMMA.F32 W8A16 (ref)",
-            ):
-                self.assertIn(f"{by_fn[name]['tflops']:.2f}", doc)
-            # Unmodified upstream vLLM Marlin (prefill + decode + SASS audit)
-            vllm = data["vllm_marlin_real"]
-            self.assertIn(vllm["vllm_commit"], doc)
-            self.assertIn(vllm["sm120_mma_audit"]["sass_instruction"], doc)
-            for row in vllm["prefill"]:
-                self.assertIn(f"{row['mxfp8_auto']['tflops']:.2f}", doc)
-                self.assertIn(f"{row['mxfp4_auto']['tflops']:.2f}", doc)
-            for row in vllm["decode_cold_l2"]:
-                self.assertIn(f"{row['mxfp8']['us']:.1f}", doc)
-                self.assertIn(f"{row['mxfp4']['us']:.1f}", doc)
-            # Hypothetical Dequant-HMMA.F16 control
-            for row in data["dequant_hmma_f16"]["shapes"]:
-                self.assertIn(f"{row['w8']['tflops']:.2f}", doc)
-                self.assertIn(f"{row['w4']['tflops']:.2f}", doc)
-            self.assertIn("2.349e-03", doc)
-            # Cold-L2 decode sweep M=1..64 & raw LDG.E.128 roof + unpack ablation
-            roof = data["decode_cold_l2_sweep"]["raw_ldg128_bw_roof"]["unpolled_1000rep"]
-            self.assertIn(f"{roof['w4_29mb_random']['us']:.1f}", doc)
-            self.assertIn(f"{roof['w4_29mb_random_plus_unpack']['us']:.1f}", doc)
-            for sw in data["decode_cold_l2_sweep"]["batch_sweeps"]:
-                by_dl = {r["label"]: r for r in sw["results"]}
-                self.assertIn(f"{by_dl['Dual-FP8 W4A16 (pre-split)']['us']:.1f}", doc)
-                self.assertIn(f"{by_dl['Dequant-HMMA.F32 W4A16 (ref)']['us']:.1f}", doc)
-            # Same-weight full Llama-3-8B MLP end-to-end (M=4096 & M=512)
-            for run in data["same_weight_mlp_e2e"]["runs"]:
-                for p in run["pipelines"]:
-                    self.assertIn(f"{p['ms']:.2f}", doc)
-            # TMA-WS split deployment modes
-            up = next(sh for sh in data["tma_ws_bench"]["shapes"] if sh["N"] == 14336 and sh["M"] == 4096)
-            by_lbl = {r["label"]: r for r in up["results"]}
-            for lbl in (
-                "TMA-WS Dual-FP8 W8A16 (pre-split)",
-                "TMA-WS Dual-FP8 W8A16 (2-kernel)",
-                "TMA-WS Dual-FP8 W8A16 (online)",
-                "TMA-WS Dual-FP8 W4A16 (pre-split)",
-                "TMA-WS Dual-FP8 W4A16 (2-kernel)",
-                "TMA-WS Dual-FP8 W4A16 (online)",
-            ):
-                self.assertIn(f"{by_lbl[lbl]['tflops']:.2f}", doc)
-            # 32k LLM KL (W8, RTN W4, AWQ+MSE W4, W4A4, and all 4 FP8-KV smoothing protocols)
-            for mid, msum in summary["llm_kl_summary"].items():
-                for w_tag in ("W8_MXFP8", "W4_MXFP4", "W4_MXFP4_AWQ_MSE"):
-                    qm = msum["quant_modes"][w_tag]
-                    rat = qm["single_over_dual_ratio"][0]
-                    hr_rat = qm["hires_single_over_dual_ratio"][0]
-                    self.assertIn(f"{rat:.1f}×", doc)
-                    self.assertIn(f"{hr_rat:.1f}×", doc)
-                    if "w4a4_mxfp4" in qm:
-                        self.assertIn(f"{qm['w4a4_mxfp4']['ppl']:.4f}", doc)
-                for kv_key in (
-                    "fp8_kv_qkt_smoothed",
-                    "fp8_kv_qkt_prefill256_frozen_full",
-                    "fp8_kv_qkt_prefill256_frozen_decode_suffix",
-                    "fp8_kv_qkt_offline_calib_static",
-                ):
-                    kv_rat = msum[kv_key]["single_over_dual_ratio"][0]
-                    kv_hr = msum[kv_key]["hires_single_over_dual_ratio"][0]
-                    self.assertIn(f"{kv_rat:.1f}×", doc)
-                    self.assertIn(f"{kv_hr:.1f}×", doc)
+    def test_route2_relocation_stubs_reference_pre_split_tag(self):
+        for name in ("route2-wt2-288k-fp64.json", "route2-dual-qmma-621.01.json"):
+            data = json.loads((GB205 / name).read_text(encoding="utf-8"))
+            self.assertEqual(data["schema"], "blackwell-abi-lab/relocation-stub/1")
+            self.assertEqual(data["status"], "moved")
+            self.assertEqual(data["pre_split_tag"], "v1-pre-split")
+            self.assertTrue(data["pre_split_commit"].startswith("5761a19"))
+        for rel in (
+            "docs/route2-mma-bypass.md",
+            "docs/route2-mma-bypass.cn.md",
+            "software/dual_qmma_tma_ws.cu",
+            "software/verify_dual_fp8.py",
+            "software/verify_wt2_bootstrap.py",
+        ):
+            txt = read(rel)
+            self.assertIn("v1-pre-split", txt, f"{rel} missing pre-split tag reference")
+            self.assertIn("5761a19", txt, f"{rel} missing pre-split commit reference")
 
 
 class ReportTableTests(unittest.TestCase):
