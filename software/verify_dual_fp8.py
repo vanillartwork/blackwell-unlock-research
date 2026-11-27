@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-only
-"""Verify archived Dual QMMA.SF benchmarks, frontier/decode/MLP sweeps, 517M scan & 32k KL on CPU."""
+"""Verify archived Dual QMMA.SF benchmarks, real vLLM Marlin, decode/MLP sweeps, 517M scan & 32k KL."""
 
 import argparse
 import json
@@ -87,6 +87,20 @@ def _summarize_kl_group(group, modes, n_chunks, resamples, label):
     base_o = out[b_key]["kl_vs_orig"][0]
     out["single_extra_kl_vs_orig_pct"] = 100.0 * (out[s_key]["kl_vs_orig"][0] - base_o) / max(base_o, 1e-30)
     out["dual_extra_kl_vs_orig_pct"] = 100.0 * (out[d_key]["kl_vs_orig"][0] - base_o) / max(base_o, 1e-30)
+    if "w4a4_mxfp4" in group:
+        w4a4 = group["w4a4_mxfp4"]
+        if len(w4a4["per_chunk_kl_vs_orig"]) != n_chunks:
+            raise ValueError(f"chunk length mismatch for {label}/w4a4_mxfp4")
+        out["w4a4_mxfp4"] = {
+            "ppl": w4a4["ppl"],
+            "kl_vs_orig": boot_mean_ci(w4a4["per_chunk_kl_vs_orig"], resamples),
+            "kl_vs_local": boot_mean_ci(w4a4["per_chunk_kl_vs_local"], resamples),
+            "hires_kl_vs_local": boot_mean_ci(w4a4["per_chunk_hires_kl_vs_local"], resamples),
+            "top1_vs_local": w4a4["top1_vs_local_ref"],
+        }
+        out["w4a4_extra_kl_vs_orig_pct"] = (
+            100.0 * (out["w4a4_mxfp4"]["kl_vs_orig"][0] - base_o) / max(base_o, 1e-30)
+        )
     return out
 
 
@@ -127,7 +141,14 @@ def verify_and_summarize(data, n_boot=None, seed=None):
             "w4_on_iso_x": by_lbl["TMA-WS Dual-FP8 W4A16 (online)"]["flop_sm_clk"] / bf["flop_sm_clk"],
         })
 
-    # 2. Verify Prefill Frontier (W4A4, Single-FP8, Dual-FP8, Marlin-HMMA, cuBLAS)
+    # 2. Verify Prefill Frontier (W4A4, Single-FP8, Dual-FP8, Dequant-HMMA.F32, Real vLLM Marlin, Dequant-HMMA.F16)
+    vllm_real = data["vllm_marlin_real"]
+    audit = vllm_real["sm120_mma_audit"]
+    if audit["sass_instruction"] != "HMMA.16816.F32.BF16" or audit["use_fp16_accum_on_sm120"]:
+        raise ValueError("unexpected upstream vLLM Marlin SM120 audit record")
+    vllm_pre_by_mn = {(r["M"], r["N"]): r for r in vllm_real["prefill"]}
+    f16_by_mn = {(r["M"], r["N"]): r for r in data["dequant_hmma_f16"]["shapes"]}
+
     frontier_summary = []
     for sh in data["prefill_frontier"]:
         by_n = {v["name"]: v for v in sh["variants"]}
@@ -135,41 +156,68 @@ def verify_and_summarize(data, n_boot=None, seed=None):
             calc_fl = (v["tflops"] * 1e6) / (sms * v["sm_mhz"])
             if abs(calc_fl - v["eff_flps"]) > 1.0:
                 raise ValueError(f"frontier eff_flps mismatch for {sh['shape']} / {v['name']}")
-        m8 = by_n["Marlin-HMMA W8A16 (dequant)"]
-        m4 = by_n["Marlin-HMMA W4A16 (dequant)"]
+        m8 = by_n["Dequant-HMMA.F32 W8A16 (ref)"]
+        m4 = by_n["Dequant-HMMA.F32 W4A16 (ref)"]
         d8 = by_n["Dual-FP8 W8A16 (pre-split)"]
         d4 = by_n["Dual-FP8 W4A16 (pre-split)"]
+        vr = vllm_pre_by_mn[(sh["M"], sh["N"])]
+        for tag in ("mxfp8_auto", "mxfp4_auto"):
+            calc_fl = (vr[tag]["tflops"] * 1e6) / (sms * vr[tag]["sm_mhz"])
+            if abs(calc_fl - vr[tag]["eff_flps"]) > 1.0:
+                raise ValueError(f"vllm_marlin_real eff_flps mismatch for {sh['shape']} / {tag}")
+        hf = f16_by_mn[(sh["M"], sh["N"])]
+        for tag in ("w8", "w4"):
+            calc_fl = (hf[tag]["tflops"] * 1e6) / (sms * hf[tag]["sm_mhz"])
+            if abs(calc_fl - hf[tag]["eff_flps"]) > 1.0:
+                raise ValueError(f"dequant_hmma_f16 eff_flps mismatch for {sh['shape']} / {tag}")
         frontier_summary.append({
             "shape": sh["shape"],
             "w4a4_tflops": by_n["W4A4 (OMMA.SF.16864)"]["tflops"],
-            "w8a16_dual_vs_marlin_wall": d8["tflops"] / m8["tflops"],
-            "w8a16_dual_vs_marlin_iso": d8["eff_flps"] / m8["eff_flps"],
-            "w4a16_dual_vs_marlin_wall": d4["tflops"] / m4["tflops"],
-            "w4a16_dual_vs_marlin_iso": d4["eff_flps"] / m4["eff_flps"],
+            "w8a16_dual_vs_dequant_wall": d8["tflops"] / m8["tflops"],
+            "w8a16_dual_vs_dequant_iso": d8["eff_flps"] / m8["eff_flps"],
+            "w4a16_dual_vs_dequant_wall": d4["tflops"] / m4["tflops"],
+            "w4a16_dual_vs_dequant_iso": d4["eff_flps"] / m4["eff_flps"],
+            "w8a16_dual_vs_vllm_marlin_wall": d8["tflops"] / vr["mxfp8_auto"]["tflops"],
+            "w4a16_dual_vs_vllm_marlin_wall": d4["tflops"] / vr["mxfp4_auto"]["tflops"],
+            "dequant_f16_w8_tflops": hf["w8"]["tflops"],
+            "dequant_f16_w4_tflops": hf["w4"]["tflops"],
+            "dequant_f16_rel_l2": hf["w8"]["rel_l2_vs_f32acc"],
         })
 
-    # 3. Verify Cold-L2 Decode Sweep (M=1..64)
+    # 3. Verify Cold-L2 Decode Sweep (M=1..64) + Real vLLM Marlin + Steady Vec128 + Raw BW Roof
+    dec_sec = data["decode_cold_l2_sweep"]
+    ceil_w8 = dec_sec["theoretical_weight_bytes_per_elem"]["w8_ceiling_vs_bf16"]
+    ceil_w4 = dec_sec["theoretical_weight_bytes_per_elem"]["w4_ceiling_vs_bf16"]
+    vllm_dec_by_m = {r["M"]: r for r in vllm_real["decode_cold_l2"]}
+    vec128_by_m = {r["M"]: r for r in dec_sec["steady_vec128_sweep"]["batch_sweeps"]}
+
     decode_summary = []
-    for sw in data["decode_cold_l2_sweep"]["batch_sweeps"]:
+    for sw in dec_sec["batch_sweeps"]:
+        m_val = sw["M"]
         by_l = {r["label"]: r for r in sw["results"]}
         bf = by_l["cuBLAS BF16->FP32"]["us"]
-        m8 = by_l["Marlin-HMMA W8A16 (dequant)"]["us"]
-        s8 = by_l["Single-FP8 W8A8 (pre-split)"]["us"]
+        m8 = by_l["Dequant-HMMA.F32 W8A16 (ref)"]["us"]
         d8 = by_l["Dual-FP8 W8A16 (pre-split)"]["us"]
-        m4 = by_l["Marlin-HMMA W4A16 (dequant)"]["us"]
-        s4 = by_l["Single-FP8 W4A8 (pre-split)"]["us"]
+        m4 = by_l["Dequant-HMMA.F32 W4A16 (ref)"]["us"]
         d4 = by_l["Dual-FP8 W4A16 (pre-split)"]["us"]
+        vr = vllm_dec_by_m[m_val]
+        v128 = {r["label"]: r for r in vec128_by_m[m_val]["results"]}
         decode_summary.append({
-            "M": sw["M"],
+            "M": m_val,
             "w8_vs_cublas": bf / d8,
-            "w8_vs_marlin": m8 / d8,
-            "w8_dual_over_single": d8 / s8,
+            "w8_pct_of_ceil": 100.0 * (bf / d8) / ceil_w8,
+            "w8_vs_dequant": m8 / d8,
+            "w8_vs_vllm_marlin": vr["mxfp8"]["us"] / d8,
             "w4_vs_cublas": bf / d4,
-            "w4_vs_marlin": m4 / d4,
-            "w4_dual_over_single": d4 / s4,
+            "w4_pct_of_ceil": 100.0 * (bf / d4) / ceil_w4,
+            "w4_vs_dequant": m4 / d4,
+            "w4_vs_vllm_marlin": vr["mxfp4"]["us"] / d4,
+            "vllm_marlin_w4_pct_of_ceil": 100.0 * (bf / vr["mxfp4"]["us"]) / ceil_w4,
+            "steady_w8_tput_dual_over_single": v128["Single-FP8 W8"]["us"] / v128["Dual-FP8 W8 (pre-split)"]["us"],
+            "steady_w4_tput_dual_over_single": v128["Single-FP8 W4"]["us"] / v128["Dual-FP8 W4 (pre-split)"]["us"],
         })
 
-    # 4. Verify Fused MLP End-to-End (RMSNorm -> gate+up -> SwiGLU -> down)
+    # 4. Verify Fused MLP End-to-End (both original and Same-Weight W8/W4 comparison)
     mlp_summary = []
     for entry in data["fused_mlp_e2e"]:
         by_p = {p["name"]: p for p in entry["pipelines"]}
@@ -185,6 +233,30 @@ def verify_and_summarize(data, n_boot=None, seed=None):
             "w8_fused_iso_x": w8f["eff_flps"] / bf["eff_flps"],
             "w4_fused_wall_x": bf["ms"] / w4f["ms"],
             "w4_fused_iso_x": w4f["eff_flps"] / bf["eff_flps"],
+        })
+
+    same_weight_mlp_summary = []
+    for run in data["same_weight_mlp_e2e"]["runs"]:
+        by_p = {p["name"]: p for p in run["pipelines"]}
+        bf = by_p["cuBLAS BF16 + standalone elem"]
+        v8 = by_p["Real vLLM Marlin MXFP8 + elem"]
+        q8 = by_p["Dequant-HMMA.F32 W8 + elem"]
+        d8 = by_p["Dual-FP8 W8A16 (Fused RMS+SwiGLU)"]
+        s8 = by_p["Single-FP8 W8A8 (Fused RMS+SwiGLU)"]
+        v4 = by_p["Real vLLM Marlin MXFP4 + elem"]
+        q4 = by_p["Dequant-HMMA.F32 W4 + elem"]
+        d4 = by_p["Dual-FP8 W4A16 (Fused RMS+SwiGLU)"]
+        s4 = by_p["Single-FP8 W4A8 (Fused RMS+SwiGLU)"]
+        a4 = by_p["W4A4 OMMA.SF (Fused RMS+SwiGLU)"]
+        same_weight_mlp_summary.append({
+            "M": run["M"],
+            "w8_dual_vs_vllm_marlin": v8["ms"] / d8["ms"],
+            "w8_dual_vs_dequant": q8["ms"] / d8["ms"],
+            "w8_single_vs_dual": d8["ms"] / s8["ms"],
+            "w4_dual_vs_vllm_marlin": v4["ms"] / d4["ms"],
+            "w4_dual_vs_dequant": q4["ms"] / d4["ms"],
+            "w4_single_vs_dual": d4["ms"] / s4["ms"],
+            "w4_w4a4_vs_bf16": bf["ms"] / a4["ms"],
         })
 
     # 5. Verify 517M-block scan totals and percentages
@@ -221,7 +293,7 @@ def verify_and_summarize(data, n_boot=None, seed=None):
                 "int8_pass": s["int8_pass"],
             }
 
-    # 6. Recompute 32k WikiText-2-raw KL means & paired bootstrap CIs (Deploy + High-Res)
+    # 6. Recompute 32k WikiText-2-raw KL means & paired bootstrap CIs (Deploy + High-Res, incl. W4A4 & Frozen K)
     kl_sec = data["llm_kl_32k"]
     proto = kl_sec["protocol"]
     n_chunks = proto["n_chunks"]
@@ -230,17 +302,22 @@ def verify_and_summarize(data, n_boot=None, seed=None):
     resamples = draw_resamples(n_chunks, n_boot, seed)
 
     llm_summary = {}
+    kv_modes = ("bf16_q_fp8_k", "single_fp8_q_fp8_k", "dual_fp8_q_fp8_k")
     for mid, mdata in kl_sec["models"].items():
-        msum = {"bf16_orig_ppl": mdata["bf16_orig_ppl"], "quant_modes": {}, "fp8_kv_qkt_smoothed": {}}
+        msum = {"bf16_orig_ppl": mdata["bf16_orig_ppl"], "quant_modes": {}}
         for w_tag, qm in mdata["quant_modes"].items():
             msum["quant_modes"][w_tag] = _summarize_kl_group(
                 qm, ("bf16", "single_fp8", "dual_fp8"), n_chunks, resamples, f"{mid}/{w_tag}"
             )
-        msum["fp8_kv_qkt_smoothed"] = _summarize_kl_group(
-            mdata["fp8_kv_qkt_smoothed"],
-            ("bf16_q_fp8_k", "single_fp8_q_fp8_k", "dual_fp8_q_fp8_k"),
-            n_chunks, resamples, f"{mid}/fp8_kv_qkt_smoothed",
-        )
+        for kv_key in (
+            "fp8_kv_qkt_smoothed",
+            "fp8_kv_qkt_prefill256_frozen_full",
+            "fp8_kv_qkt_prefill256_frozen_decode_suffix",
+            "fp8_kv_qkt_offline_calib_static",
+        ):
+            msum[kv_key] = _summarize_kl_group(
+                mdata[kv_key], kv_modes, n_chunks, resamples, f"{mid}/{kv_key}"
+            )
         llm_summary[mid] = msum
 
     return {
@@ -253,6 +330,7 @@ def verify_and_summarize(data, n_boot=None, seed=None):
         "prefill_frontier_summary": frontier_summary,
         "decode_cold_l2_summary": decode_summary,
         "fused_mlp_summary": mlp_summary,
+        "same_weight_mlp_summary": same_weight_mlp_summary,
         "block_scan_summary": scan_summary,
         "llm_kl_summary": llm_summary,
         "n_chunks": n_chunks,
@@ -266,27 +344,28 @@ def format_report(summary):
         f"GPU     : {summary['gpu']} ({summary['sm_count']} SMs)",
         f"Scanned : {summary['total_blocks_scanned']:,} blocks ({summary['total_elems_scanned']:,} BF16 elems) | Exact INT8 pass: {summary['total_int8_exact_pass']}",
         "",
-        "Prefill Frontier (Dual-FP8 vs Marlin-HMMA wall / iso-clk, and W4A4 OMMA.SF):",
+        "Prefill Frontier (Dual-FP8 vs Dequant-HMMA.F32 / Real vLLM Marlin, Dequant-HMMA.F16, W4A4):",
     ]
     for r in summary["prefill_frontier_summary"]:
         lines.append(
-            f"  {r['shape']:<32s} | W8A16 vs Marlin={r['w8a16_dual_vs_marlin_wall']:.2f}x/{r['w8a16_dual_vs_marlin_iso']:.2f}x "
-            f"| W4A16 vs Marlin={r['w4a16_dual_vs_marlin_wall']:.2f}x/{r['w4a16_dual_vs_marlin_iso']:.2f}x | W4A4={r['w4a4_tflops']:.1f} TF/s"
+            f"  {r['shape']:<32s} | W8A16 vs Deq/vLLM={r['w8a16_dual_vs_dequant_wall']:.2f}x/{r['w8a16_dual_vs_vllm_marlin_wall']:.2f}x "
+            f"| W4A16 vs Deq/vLLM={r['w4a16_dual_vs_dequant_wall']:.2f}x/{r['w4a16_dual_vs_vllm_marlin_wall']:.2f}x "
+            f"| DeqF16={r['dequant_f16_w8_tflops']:.1f}/{r['dequant_f16_w4_tflops']:.1f} TF/s (L2={r['dequant_f16_rel_l2']:.2e}) "
+            f"| W4A4={r['w4a4_tflops']:.1f} TF/s"
         )
     lines.append("")
-    lines.append("Cold-L2 Decode Sweep (Llama8B Up 14336x4096):")
+    lines.append("Cold-L2 Decode Sweep (Llama8B Up 14336x4096; steady throughput ratio = us_Single / us_Dual):")
     for r in summary["decode_cold_l2_summary"]:
         lines.append(
-            f"  M={r['M']:2d} | W8A16 vs cuBLAS={r['w8_vs_cublas']:.2f}x vs Marlin={r['w8_vs_marlin']:.2f}x (Dual/Single={r['w8_dual_over_single']:.2f}x) "
-            f"| W4A16 vs cuBLAS={r['w4_vs_cublas']:.2f}x vs Marlin={r['w4_vs_marlin']:.2f}x (Dual/Single={r['w4_dual_over_single']:.2f}x)"
+            f"  M={r['M']:2d} | W8 vs BF16={r['w8_vs_cublas']:.2f}x ({r['w8_pct_of_ceil']:.0f}% ceil) vs vLLM={r['w8_vs_vllm_marlin']:.2f}x (tput Dual/Single={r['steady_w8_tput_dual_over_single']:.2f}x) "
+            f"| W4 vs BF16={r['w4_vs_cublas']:.2f}x ({r['w4_pct_of_ceil']:.0f}% ceil) vs vLLM={r['w4_vs_vllm_marlin']:.2f}x (tput Dual/Single={r['steady_w4_tput_dual_over_single']:.2f}x)"
         )
     lines.append("")
-    lines.append("Fused Llama-3-8B MLP End-to-End (RMSNorm + gate/up + SwiGLU + down):")
-    for r in summary["fused_mlp_summary"]:
+    lines.append("Same-Weight Llama-3-8B MLP End-to-End (RMSNorm + gate/up + SwiGLU + down):")
+    for r in summary["same_weight_mlp_summary"]:
         lines.append(
-            f"  M={r['M']:4d} | RMSNorm_delta={r['rmsnorm_delta_us']:+.1f} us, SwiGLU_delta={r['swiglu_delta_us']:+.1f} us "
-            f"| W8A16={r['w8_fused_wall_x']:.2f}x wall/{r['w8_fused_iso_x']:.2f}x iso "
-            f"| W4A16={r['w4_fused_wall_x']:.2f}x wall/{r['w4_fused_iso_x']:.2f}x iso"
+            f"  M={r['M']:4d} | W8 Dual vs vLLM={r['w8_dual_vs_vllm_marlin']:.2f}x vs Deq={r['w8_dual_vs_dequant']:.2f}x (Single/Dual={r['w8_single_vs_dual']:.2f}x) "
+            f"| W4 Dual vs vLLM={r['w4_dual_vs_vllm_marlin']:.2f}x vs Deq={r['w4_dual_vs_dequant']:.2f}x (Single/Dual={r['w4_single_vs_dual']:.2f}x, W4A4/BF16={r['w4_w4a4_vs_bf16']:.2f}x)"
         )
     lines.append("")
     lines.append(f"32k WikiText-2-raw KL Verification (bootstrap={summary['n_boot']}, seed={summary['seed']}):")
@@ -295,17 +374,26 @@ def format_report(summary):
         for w_tag, q in m["quant_modes"].items():
             rat, lo, hi = q["single_over_dual_ratio"]
             hr_rat = q["hires_single_over_dual_ratio"][0]
+            extra_w4a4 = ""
+            if "w4a4_mxfp4" in q:
+                extra_w4a4 = f" | W4A4 PPL={q['w4a4_mxfp4']['ppl']:.2f} ({q['w4a4_extra_kl_vs_orig_pct']:+.1f}% vs orig)"
             lines.append(
                 f"    {w_tag:<16s}: Single/Dual={rat:5.1f}x [{lo:4.1f}x, {hi:4.1f}x] (HiRes {hr_rat:4.1f}x) "
-                f"| extra KL vs orig: Single={q['single_extra_kl_vs_orig_pct']:+5.1f}%, Dual={q['dual_extra_kl_vs_orig_pct']:+.2f}%"
+                f"| extra KL vs orig: Single={q['single_extra_kl_vs_orig_pct']:+5.1f}%, Dual={q['dual_extra_kl_vs_orig_pct']:+.2f}%{extra_w4a4}"
             )
-        kv = m["fp8_kv_qkt_smoothed"]
-        r_kv, lo_kv, hi_kv = kv["single_over_dual_ratio"]
-        hr_kv = kv["hires_single_over_dual_ratio"][0]
-        lines.append(
-            f"    {'FP8-KV-Smooth':<16s}: Single/Dual={r_kv:5.1f}x [{lo_kv:4.1f}x, {hi_kv:4.1f}x] (HiRes {hr_kv:4.1f}x) "
-            f"| extra KL vs orig: Single={kv['single_extra_kl_vs_orig_pct']:+5.1f}%, Dual={kv['dual_extra_kl_vs_orig_pct']:+.2f}%"
-        )
+        for kv_tag, kv_key in (
+            ("FP8-KV-FullMean", "fp8_kv_qkt_smoothed"),
+            ("FP8-KV-Pre256", "fp8_kv_qkt_prefill256_frozen_full"),
+            ("FP8-KV-Dec256+", "fp8_kv_qkt_prefill256_frozen_decode_suffix"),
+            ("FP8-KV-OffCalib", "fp8_kv_qkt_offline_calib_static"),
+        ):
+            kv = m[kv_key]
+            r_kv, lo_kv, hi_kv = kv["single_over_dual_ratio"]
+            hr_kv = kv["hires_single_over_dual_ratio"][0]
+            lines.append(
+                f"    {kv_tag:<16s}: Single/Dual={r_kv:5.1f}x [{lo_kv:4.1f}x, {hi_kv:4.1f}x] (HiRes {hr_kv:4.1f}x) "
+                f"| BF16-Q KL_o={kv['bf16_q_fp8_k']['kl_vs_orig'][0]:.3e} | Single={kv['single_extra_kl_vs_orig_pct']:+5.1f}%, Dual={kv['dual_extra_kl_vs_orig_pct']:+.2f}%"
+            )
     return "\n".join(lines)
 
 

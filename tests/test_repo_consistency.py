@@ -287,7 +287,8 @@ class ArchivedJsonTests(unittest.TestCase):
         doc_zh = read("docs/route2-mma-bypass.cn.md")
         for doc in (doc_en, doc_zh):
             self.assertIn("517,031,936", doc)
-            # Prefill frontier (W4A4, Marlin-HMMA, Single-FP8, Dual-FP8)
+            self.assertNotIn("Marlin-HMMA", doc)
+            # Prefill frontier (W4A4, Dequant-HMMA.F32, Single-FP8, Dual-FP8, Real vLLM Marlin, Dequant-HMMA.F16)
             fr_up = next(sh for sh in data["prefill_frontier"] if sh["M"] == 4096 and sh["N"] == 14336)
             by_fn = {v["name"]: v for v in fr_up["variants"]}
             for name in (
@@ -296,20 +297,37 @@ class ArchivedJsonTests(unittest.TestCase):
                 "Single-FP8 W8A8 (QMMA.SF)",
                 "Dual-FP8 W4A16 (pre-split)",
                 "Dual-FP8 W8A16 (pre-split)",
-                "Marlin-HMMA W4A16 (dequant)",
-                "Marlin-HMMA W8A16 (dequant)",
+                "Dequant-HMMA.F32 W4A16 (ref)",
+                "Dequant-HMMA.F32 W8A16 (ref)",
             ):
                 self.assertIn(f"{by_fn[name]['tflops']:.2f}", doc)
-            # Cold-L2 decode sweep M=1..64
+            # Unmodified upstream vLLM Marlin (prefill + decode + SASS audit)
+            vllm = data["vllm_marlin_real"]
+            self.assertIn(vllm["vllm_commit"], doc)
+            self.assertIn(vllm["sm120_mma_audit"]["sass_instruction"], doc)
+            for row in vllm["prefill"]:
+                self.assertIn(f"{row['mxfp8_auto']['tflops']:.2f}", doc)
+                self.assertIn(f"{row['mxfp4_auto']['tflops']:.2f}", doc)
+            for row in vllm["decode_cold_l2"]:
+                self.assertIn(f"{row['mxfp8']['us']:.1f}", doc)
+                self.assertIn(f"{row['mxfp4']['us']:.1f}", doc)
+            # Hypothetical Dequant-HMMA.F16 control
+            for row in data["dequant_hmma_f16"]["shapes"]:
+                self.assertIn(f"{row['w8']['tflops']:.2f}", doc)
+                self.assertIn(f"{row['w4']['tflops']:.2f}", doc)
+            self.assertIn("2.349e-03", doc)
+            # Cold-L2 decode sweep M=1..64 & raw LDG.E.128 roof + unpack ablation
+            roof = data["decode_cold_l2_sweep"]["raw_ldg128_bw_roof"]["unpolled_1000rep"]
+            self.assertIn(f"{roof['w4_29mb_random']['us']:.1f}", doc)
+            self.assertIn(f"{roof['w4_29mb_random_plus_unpack']['us']:.1f}", doc)
             for sw in data["decode_cold_l2_sweep"]["batch_sweeps"]:
                 by_dl = {r["label"]: r for r in sw["results"]}
                 self.assertIn(f"{by_dl['Dual-FP8 W4A16 (pre-split)']['us']:.1f}", doc)
-                self.assertIn(f"{by_dl['Marlin-HMMA W4A16 (dequant)']['us']:.1f}", doc)
-            # Fused MLP end-to-end
-            for mlp in data["fused_mlp_e2e"]:
-                by_p = {p["name"]: p for p in mlp["pipelines"]}
-                self.assertIn(f"{by_p['Dual-FP8 W8A16 (Fused Epilogue)']['ms']:.2f}", doc)
-                self.assertIn(f"{by_p['Dual-FP8 W4A16 (Fused Epilogue)']['ms']:.2f}", doc)
+                self.assertIn(f"{by_dl['Dequant-HMMA.F32 W4A16 (ref)']['us']:.1f}", doc)
+            # Same-weight full Llama-3-8B MLP end-to-end (M=4096 & M=512)
+            for run in data["same_weight_mlp_e2e"]["runs"]:
+                for p in run["pipelines"]:
+                    self.assertIn(f"{p['ms']:.2f}", doc)
             # TMA-WS split deployment modes
             up = next(sh for sh in data["tma_ws_bench"]["shapes"] if sh["N"] == 14336 and sh["M"] == 4096)
             by_lbl = {r["label"]: r for r in up["results"]}
@@ -322,17 +340,26 @@ class ArchivedJsonTests(unittest.TestCase):
                 "TMA-WS Dual-FP8 W4A16 (online)",
             ):
                 self.assertIn(f"{by_lbl[lbl]['tflops']:.2f}", doc)
-            # 32k LLM KL (W8, RTN W4, AWQ+MSE W4, K-smoothed FP8-KV; Deploy & High-Res)
+            # 32k LLM KL (W8, RTN W4, AWQ+MSE W4, W4A4, and all 4 FP8-KV smoothing protocols)
             for mid, msum in summary["llm_kl_summary"].items():
                 for w_tag in ("W8_MXFP8", "W4_MXFP4", "W4_MXFP4_AWQ_MSE"):
-                    rat = msum["quant_modes"][w_tag]["single_over_dual_ratio"][0]
-                    hr_rat = msum["quant_modes"][w_tag]["hires_single_over_dual_ratio"][0]
+                    qm = msum["quant_modes"][w_tag]
+                    rat = qm["single_over_dual_ratio"][0]
+                    hr_rat = qm["hires_single_over_dual_ratio"][0]
                     self.assertIn(f"{rat:.1f}×", doc)
                     self.assertIn(f"{hr_rat:.1f}×", doc)
-                kv_rat = msum["fp8_kv_qkt_smoothed"]["single_over_dual_ratio"][0]
-                kv_hr = msum["fp8_kv_qkt_smoothed"]["hires_single_over_dual_ratio"][0]
-                self.assertIn(f"{kv_rat:.1f}×", doc)
-                self.assertIn(f"{kv_hr:.1f}×", doc)
+                    if "w4a4_mxfp4" in qm:
+                        self.assertIn(f"{qm['w4a4_mxfp4']['ppl']:.4f}", doc)
+                for kv_key in (
+                    "fp8_kv_qkt_smoothed",
+                    "fp8_kv_qkt_prefill256_frozen_full",
+                    "fp8_kv_qkt_prefill256_frozen_decode_suffix",
+                    "fp8_kv_qkt_offline_calib_static",
+                ):
+                    kv_rat = msum[kv_key]["single_over_dual_ratio"][0]
+                    kv_hr = msum[kv_key]["hires_single_over_dual_ratio"][0]
+                    self.assertIn(f"{kv_rat:.1f}×", doc)
+                    self.assertIn(f"{kv_hr:.1f}×", doc)
 
 
 class ReportTableTests(unittest.TestCase):
