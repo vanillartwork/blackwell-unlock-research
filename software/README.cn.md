@@ -12,8 +12,8 @@
 |---|---|
 | [clamp_eval.py](clamp_eval.py) | 跨平台稳态张量钳制评估器（`fp16_fp16acc` / `fp16_fp32acc` / `bf16_fp32acc` / `tf32_fp32acc` / `fp8_fp32acc` / `int8` / `fp32_control` + `16×16` CPU FP64 相对 L2 误差 + 顺序平衡配对 A/B） |
 | [chunked_fp16_matmul.py](chunked_fp16_matmul.py) | K 维分块 FP16 累加 + FP32 块间归约（提供可导入的 `chunked_fp16_mm` / `chunked_fp16_matmul` 函数及 CLI 帕累托扫描） |
-| [dual_qmma_tma_ws.cu](dual_qmma_tma_ws.cu) | SM 12.0 `TMA-WS 128×256×64` 单侧双发 `QMMA.SF`（`W8A16` / `W4A16`，含预拆分 / 独立两核 / 单核在线拆分与稳态 NVML 基准） |
-| [verify_dual_fp8.py](verify_dual_fp8.py) | 纯标准库（无 GPU）复算脚本，校验 `reports/gb205-2f18/route2-dual-qmma-621.01.json` 全部 TMA-WS 吞吐、5.17 亿块分布扫描与 32k LLM KL 置信区间 |
+| [dual_qmma_tma_ws.cu](dual_qmma_tma_ws.cu) | SM 12.0 `TMA-WS 128×256×64` 单侧双发 `QMMA.SF`（`W8A16` / `W4A16`，含预拆分 / 独立两核 / 单核在线拆分、融合 `RMSNorm`/`SwiGLU` 双拆分 epilogue 与稳态 NVML 基准） |
+| [verify_dual_fp8.py](verify_dual_fp8.py) | 纯标准库（无 GPU）复算脚本，校验 `reports/gb205-2f18/route2-dual-qmma-621.01.json` 全部 TMA-WS 吞吐、Prefill 竞品前沿（含 `Marlin-HMMA`/`W4A4`）、冷 L2 Decode 扫描、融合 MLP、5.17 亿块分布扫描与 32k 双口径 LLM KL 置信区间 |
 | [verify_wt2_bootstrap.py](verify_wt2_bootstrap.py) | 纯标准库（无 GPU / 无第三方依赖）复算脚本，可直接从 `reports/gb205-2f18/route2-wt2-288k-fp64.json` 重算均值、ΔPPL、超额 KL、压缩比与 95% 配对 bootstrap 置信区间 |
 
 ---
@@ -114,7 +114,7 @@ python3 scripts/verify-baseline.py --clamp-json clamp-local.json --compare repor
 | MXFP8 `E3M4FN`（cubin 修补 SASS） | 修补 `QMMA.SF.16832`（`code = 2`）+ UE8M0 | `2048` | 比 E4M3 多 1-bit 尾数（最大有限值 `30.0`，无 PTX 语法，需原位修补 cubin） |
 | 混合 FP8×FP6 / FP8×FP4（`W6A8` / `W4A8`） | 单位缩放 / 块缩放 `QMMA.SF` | `2048` | 与普通 `kind::f8f6f4` 逐位一致 |
 | MXFP4 / NVFP4 | `OMMA.SF.16864`（`mxf4` / `mxf4nvf4`） | `4096` | 仅有 FP4 量化误差 |
-| **`W8A16` / `W4A16` / FP8-KV `QKᵀ`** | **单侧双发 `QMMA.SF`（`X = s(H+L/16)`，共享 FP32 累加器，见 [dual_qmma_tma_ws.cu](dual_qmma_tma_ws.cu)）** | **`951–981`**（同频 **`1.87–1.95×`**，单核在线 `892–893` / `1.77×`） | 硬件无 FTZ（`[2⁻⁶, 256)` 逐位无损）；真 FP64 `rel_L2 = 1.67e-7–1.38e-6`（优于 `cuBLAS BF16`）；32k LLM 较单次 FP8 降 KL **`8.9×–10.5×`** |
+| **`W8A16` / `W4A16` / K 平滑 FP8-KV `QKᵀ`** | **单侧双发 `QMMA.SF`（`X = s(H+L/16)`，共享 FP32 累加器，见 [dual_qmma_tma_ws.cu](dual_qmma_tma_ws.cu)）** | **`951–981`**（相对 `Marlin-HMMA` 同频 **`1.97–2.01×`**；融合 MLP 墙钟 `1.56–1.67×`；冷 L2 Decode `M=32–64` 领先 Marlin `1.39–1.64×`） | 硬件无 FTZ（`[2⁻⁶, 256)` 逐位无损）；同权重真 FP64 `rel_L2` 与 `cuBLAS BF16` 同量级（`W8: 1.38e-6`，`W4: 1.67e-7`）；消除 `W8` / K 平滑 `FP8-KV` 上 Single-FP8 的 `+71%–107%` 额外 KL（高分辨率本地 KL 降 `20.8×–24.5×`） |
 | FP16 / BF16 近似高斯推理常规层 | **TMA-WS 纯 `B1`（`N=3` `HMMA.F16` + `HADD2.F32`/`FADD` 刷新）** | **`782–841`**（`K=4096`，同频较 `cuBLAS BF16` 快 `1.61–1.66×`） | 单 GEMM `rel_L2 ≈ 2.94e-4`；BF16 部署与 `cuBLAS` 统计不可区分；FP16 部署仅 `+1.35e-6` 超额 KL（`+10%`） |
 | FP16 / BF16 强离群通道层（如 `down_proj`） | **TMA-WS `C1+B1`（`N=2`，`1:2` F32:F16）+ `K` 维重排（`rms(X)`）** | **`736–791`**（`K=4096`，同频 `1.52–1.56×`，较纯 `B1` 多 `+6.4%`） | 单层 FP32 `rel_L2` 降 **~6×**（`4.9e-5`）、FP16 部分和峰值降 **20×–137×**、FP16 LLM 超额 KL 降 **2.7×–2.9×** |
 | 大 `K` 且激活均值非零（如权重梯度 GEMM） | **`HMMA.F32` + 每 16 步 `k16` 做 RN 刷新（`RN16`）** | `512`（与原生同速） | 较 `cublasGemmEx` 准 **19×–84×**（`K=262k` 触发 split-K 时 `19×`；`K=65k` 未触发 split-K 时 `84×`） |

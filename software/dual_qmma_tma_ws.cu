@@ -141,6 +141,138 @@ __global__ void split_bf16_to_dual_fp8_kernel(
     if (q == 0) sH[(size_t)kb * M + row] = (uint8_t)sH_byte;
 }
 
+// Round 8 FP32 values to BF16 and dual-split across a 4-thread quad (32-element K-block).
+__device__ __forceinline__ void split_8f32_bf16_quad(
+    float v0, float v1, float v2, float v3, float v4, float v5, float v6, float v7,
+    uint32_t& sH_out, uint2& h_out, uint2& l_out
+) {
+    v0 = __bfloat162float(__float2bfloat16(v0)); v1 = __bfloat162float(__float2bfloat16(v1));
+    v2 = __bfloat162float(__float2bfloat16(v2)); v3 = __bfloat162float(__float2bfloat16(v3));
+    v4 = __bfloat162float(__float2bfloat16(v4)); v5 = __bfloat162float(__float2bfloat16(v5));
+    v6 = __bfloat162float(__float2bfloat16(v6)); v7 = __bfloat162float(__float2bfloat16(v7));
+
+    float ax = fmaxf(fmaxf(fabsf(v0), fabsf(v1)), fmaxf(fabsf(v2), fabsf(v3)));
+    ax = fmaxf(ax, fmaxf(fmaxf(fabsf(v4), fabsf(v5)), fmaxf(fabsf(v6), fabsf(v7))));
+    ax = fmaxf(ax, __shfl_xor_sync(0xffffffffu, ax, 1));
+    ax = fmaxf(ax, __shfl_xor_sync(0xffffffffu, ax, 2));
+
+    uint32_t sH_byte;
+    float inv_s;
+    if (ax == 0.0f) {
+        sH_byte = 127u;
+        inv_s = 1.0f;
+    } else {
+        int emax = (int)((__float_as_uint(ax) >> 23) & 0xFFu);
+        int sh = max(emax - 7, 4);
+        sH_byte = (uint32_t)sh;
+        inv_s = __uint_as_float((uint32_t)(254 - sh) << 23);
+    }
+    sH_out = sH_byte;
+    uint16_t h0, h1, h2, h3, l0, l1, l2, l3;
+    split_f32x2_to_hl2(v0 * inv_s, v1 * inv_s, h0, l0);
+    split_f32x2_to_hl2(v2 * inv_s, v3 * inv_s, h1, l1);
+    split_f32x2_to_hl2(v4 * inv_s, v5 * inv_s, h2, l2);
+    split_f32x2_to_hl2(v6 * inv_s, v7 * inv_s, h3, l3);
+    h_out = make_uint2((uint32_t)h0 | ((uint32_t)h1 << 16), (uint32_t)h2 | ((uint32_t)h3 << 16));
+    l_out = make_uint2((uint32_t)l0 | ((uint32_t)l1 << 16), (uint32_t)l2 | ((uint32_t)l3 << 16));
+}
+
+// Reference fused RMSNorm -> Dual-FP8 epilogue (K=4096, 1 CTA of 256 threads per row).
+// Emits H[M, K], L[M, K], and K-block-outer sH[K/32, M] directly for pre-split QMMA.SF
+// reuse across gate_proj + up_proj (or Q/K/V) with ~0 us overhead vs standalone RMSNorm.
+__global__ void rmsnorm_fused_dual_split_kernel(
+    const __nv_bfloat16* __restrict__ X,
+    const __nv_bfloat16* __restrict__ gamma,
+    uint8_t* __restrict__ H,
+    uint8_t* __restrict__ L,
+    uint8_t* __restrict__ sH,
+    int M, int K, float eps
+) {
+    int row = blockIdx.x, tid = threadIdx.x;
+    if (row >= M) return;
+    const __nv_bfloat16* xr = X + (size_t)row * K;
+    uint8_t* hr = H + (size_t)row * K;
+    uint8_t* lr = L + (size_t)row * K;
+
+    uint4 r0 = *reinterpret_cast<const uint4*>(xr + tid * 8);
+    uint4 r1 = *reinterpret_cast<const uint4*>(xr + 2048 + tid * 8);
+    uint4 g0 = *reinterpret_cast<const uint4*>(gamma + tid * 8);
+    uint4 g1 = *reinterpret_cast<const uint4*>(gamma + 2048 + tid * 8);
+
+    const __nv_bfloat162* x2a = reinterpret_cast<const __nv_bfloat162*>(&r0);
+    const __nv_bfloat162* x2b = reinterpret_cast<const __nv_bfloat162*>(&r1);
+    float sum2 = 0.0f, vx[16];
+    #pragma unroll
+    for (int i = 0; i < 4; ++i) {
+        float2 p = __bfloat1622float2(x2a[i]); vx[2*i] = p.x; vx[2*i+1] = p.y; sum2 += p.x*p.x + p.y*p.y;
+        float2 q = __bfloat1622float2(x2b[i]); vx[8+2*i] = q.x; vx[8+2*i+1] = q.y; sum2 += q.x*q.x + q.y*q.y;
+    }
+    for (int o = 16; o > 0; o >>= 1) sum2 += __shfl_xor_sync(0xffffffffu, sum2, o);
+    __shared__ float s_w[8];
+    if ((tid & 31) == 0) s_w[tid >> 5] = sum2;
+    __syncthreads();
+    if (tid < 8) { float v = s_w[tid]; for (int o = 4; o > 0; o >>= 1) v += __shfl_xor_sync(0xffu, v, o); s_w[tid] = v; }
+    __syncthreads();
+    float inv_rms = rsqrtf(s_w[0] / (float)K + eps);
+
+    const __nv_bfloat162* g2a = reinterpret_cast<const __nv_bfloat162*>(&g0);
+    const __nv_bfloat162* g2b = reinterpret_cast<const __nv_bfloat162*>(&g1);
+    float ya[8], yb[8];
+    #pragma unroll
+    for (int i = 0; i < 4; ++i) {
+        float2 ga = __bfloat1622float2(g2a[i]), gb = __bfloat1622float2(g2b[i]);
+        ya[2*i] = vx[2*i] * inv_rms * ga.x; ya[2*i+1] = vx[2*i+1] * inv_rms * ga.y;
+        yb[2*i] = vx[8+2*i] * inv_rms * gb.x; yb[2*i+1] = vx[8+2*i+1] * inv_rms * gb.y;
+    }
+    int q = tid & 3;
+    int kb0 = tid >> 2, kb1 = 64 + (tid >> 2);
+    uint32_t sH0, sH1; uint2 h0, l0, h1, l1;
+    split_8f32_bf16_quad(ya[0], ya[1], ya[2], ya[3], ya[4], ya[5], ya[6], ya[7], sH0, h0, l0);
+    split_8f32_bf16_quad(yb[0], yb[1], yb[2], yb[3], yb[4], yb[5], yb[6], yb[7], sH1, h1, l1);
+
+    *reinterpret_cast<uint2*>(hr + tid * 8)        = h0;
+    *reinterpret_cast<uint2*>(lr + tid * 8)        = l0;
+    *reinterpret_cast<uint2*>(hr + 2048 + tid * 8) = h1;
+    *reinterpret_cast<uint2*>(lr + 2048 + tid * 8) = l1;
+    if (q == 0) {
+        sH[(size_t)kb0 * M + row] = (uint8_t)sH0;
+        sH[(size_t)kb1 * M + row] = (uint8_t)sH1;
+    }
+}
+
+// Reference fused SwiGLU -> Dual-FP8 epilogue (4 threads per 32-element K-block).
+// Emits H[M, I], L[M, I], and K-block-outer sH[I/32, M] directly for down_proj.
+__global__ void swiglu_fused_dual_split_kernel(
+    const float* __restrict__ Gate,
+    const float* __restrict__ Up,
+    uint8_t* __restrict__ H,
+    uint8_t* __restrict__ L,
+    uint8_t* __restrict__ sH,
+    int M, int I
+) {
+    int num_kb = I >> 5;
+    int tid_g = blockIdx.x * blockDim.x + threadIdx.x;
+    int blk_g = tid_g >> 2, q = tid_g & 3;
+    if (blk_g >= M * num_kb) return;
+    int row = blk_g / num_kb, kb = blk_g - row * num_kb;
+    int off = row * I + (kb << 5) + (q << 3);
+
+    float4 g0 = *reinterpret_cast<const float4*>(Gate + off);
+    float4 g1 = *reinterpret_cast<const float4*>(Gate + off + 4);
+    float4 u0 = *reinterpret_cast<const float4*>(Up + off);
+    float4 u1 = *reinterpret_cast<const float4*>(Up + off + 4);
+    auto silu = [](float x) { return x / (1.0f + __expf(-x)); };
+    uint32_t sH_byte; uint2 h8, l8;
+    split_8f32_bf16_quad(
+        silu(g0.x)*u0.x, silu(g0.y)*u0.y, silu(g0.z)*u0.z, silu(g0.w)*u0.w,
+        silu(g1.x)*u1.x, silu(g1.y)*u1.y, silu(g1.z)*u1.z, silu(g1.w)*u1.w,
+        sH_byte, h8, l8
+    );
+    *reinterpret_cast<uint2*>(H + off) = h8;
+    *reinterpret_cast<uint2*>(L + off) = l8;
+    if (q == 0) sH[(size_t)kb * M + row] = (uint8_t)sH_byte;
+}
+
 // Unified TMA-WS 128x256x64 QMMA.SF kernel.
 //   USE_W4       = false: W8A16 (E4M3 x E4M3), W in GMEM as [N, K] uint8
 //   USE_W4       = true : W4A16 (E4M3 x E2M1), W in GMEM as [N, K/2] uint8 (interleaved k, k+16 nibbles)

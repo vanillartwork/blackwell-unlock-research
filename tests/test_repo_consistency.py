@@ -283,25 +283,56 @@ class ArchivedJsonTests(unittest.TestCase):
         summary = mod.verify_and_summarize(data)
         self.assertEqual(summary["total_blocks_scanned"], 517031936)
         self.assertEqual(summary["total_int8_exact_pass"], 0)
-        doc = read("docs/route2-mma-bypass.md")
-        self.assertIn("517,031,936", doc)
-        up = next(sh for sh in data["tma_ws_bench"]["shapes"] if sh["N"] == 14336 and sh["M"] == 4096)
-        by_lbl = {r["label"]: r for r in up["results"]}
-        for lbl in (
-            "TMA-WS Dual-FP8 W8A16 (pre-split)",
-            "TMA-WS Dual-FP8 W8A16 (2-kernel)",
-            "TMA-WS Dual-FP8 W8A16 (online)",
-            "TMA-WS Dual-FP8 W4A16 (pre-split)",
-            "TMA-WS Dual-FP8 W4A16 (2-kernel)",
-            "TMA-WS Dual-FP8 W4A16 (online)",
-        ):
-            self.assertIn(f"{by_lbl[lbl]['tflops']:.2f}", doc)
-        for mid, msum in summary["llm_kl_summary"].items():
-            for w_tag in ("W8_MXFP8", "W4_MXFP4"):
-                rat = msum["quant_modes"][w_tag]["single_over_dual_ratio"][0]
-                self.assertIn(f"{rat:.1f}×", doc)
-            kv_rat = msum["fp8_kv_qkt"]["single_over_dual_ratio"][0]
-            self.assertIn(f"{kv_rat:.1f}×", doc)
+        doc_en = read("docs/route2-mma-bypass.md")
+        doc_zh = read("docs/route2-mma-bypass.cn.md")
+        for doc in (doc_en, doc_zh):
+            self.assertIn("517,031,936", doc)
+            # Prefill frontier (W4A4, Marlin-HMMA, Single-FP8, Dual-FP8)
+            fr_up = next(sh for sh in data["prefill_frontier"] if sh["M"] == 4096 and sh["N"] == 14336)
+            by_fn = {v["name"]: v for v in fr_up["variants"]}
+            for name in (
+                "W4A4 (OMMA.SF.16864)",
+                "Single-FP8 W4A8 (QMMA.SF)",
+                "Single-FP8 W8A8 (QMMA.SF)",
+                "Dual-FP8 W4A16 (pre-split)",
+                "Dual-FP8 W8A16 (pre-split)",
+                "Marlin-HMMA W4A16 (dequant)",
+                "Marlin-HMMA W8A16 (dequant)",
+            ):
+                self.assertIn(f"{by_fn[name]['tflops']:.2f}", doc)
+            # Cold-L2 decode sweep M=1..64
+            for sw in data["decode_cold_l2_sweep"]["batch_sweeps"]:
+                by_dl = {r["label"]: r for r in sw["results"]}
+                self.assertIn(f"{by_dl['Dual-FP8 W4A16 (pre-split)']['us']:.1f}", doc)
+                self.assertIn(f"{by_dl['Marlin-HMMA W4A16 (dequant)']['us']:.1f}", doc)
+            # Fused MLP end-to-end
+            for mlp in data["fused_mlp_e2e"]:
+                by_p = {p["name"]: p for p in mlp["pipelines"]}
+                self.assertIn(f"{by_p['Dual-FP8 W8A16 (Fused Epilogue)']['ms']:.2f}", doc)
+                self.assertIn(f"{by_p['Dual-FP8 W4A16 (Fused Epilogue)']['ms']:.2f}", doc)
+            # TMA-WS split deployment modes
+            up = next(sh for sh in data["tma_ws_bench"]["shapes"] if sh["N"] == 14336 and sh["M"] == 4096)
+            by_lbl = {r["label"]: r for r in up["results"]}
+            for lbl in (
+                "TMA-WS Dual-FP8 W8A16 (pre-split)",
+                "TMA-WS Dual-FP8 W8A16 (2-kernel)",
+                "TMA-WS Dual-FP8 W8A16 (online)",
+                "TMA-WS Dual-FP8 W4A16 (pre-split)",
+                "TMA-WS Dual-FP8 W4A16 (2-kernel)",
+                "TMA-WS Dual-FP8 W4A16 (online)",
+            ):
+                self.assertIn(f"{by_lbl[lbl]['tflops']:.2f}", doc)
+            # 32k LLM KL (W8, RTN W4, AWQ+MSE W4, K-smoothed FP8-KV; Deploy & High-Res)
+            for mid, msum in summary["llm_kl_summary"].items():
+                for w_tag in ("W8_MXFP8", "W4_MXFP4", "W4_MXFP4_AWQ_MSE"):
+                    rat = msum["quant_modes"][w_tag]["single_over_dual_ratio"][0]
+                    hr_rat = msum["quant_modes"][w_tag]["hires_single_over_dual_ratio"][0]
+                    self.assertIn(f"{rat:.1f}×", doc)
+                    self.assertIn(f"{hr_rat:.1f}×", doc)
+                kv_rat = msum["fp8_kv_qkt_smoothed"]["single_over_dual_ratio"][0]
+                kv_hr = msum["fp8_kv_qkt_smoothed"]["hires_single_over_dual_ratio"][0]
+                self.assertIn(f"{kv_rat:.1f}×", doc)
+                self.assertIn(f"{kv_hr:.1f}×", doc)
 
 
 class ReportTableTests(unittest.TestCase):
